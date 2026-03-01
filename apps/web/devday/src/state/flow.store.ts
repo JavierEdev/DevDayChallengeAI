@@ -103,18 +103,39 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
     })),
 
   onConnect: (connection) =>
-    set((state) => ({
-      edges: addEdge(
-        {
-          id: createId("edge"),
-          source: connection.source ?? "",
-          target: connection.target ?? "",
-          sourceHandle: connection.sourceHandle ?? undefined,
-          targetHandle: connection.targetHandle ?? undefined
-        },
-        state.edges
-      ) as BuilderFlowEdge[]
-    })),
+    set((state) => {
+      if (!connection.source || !connection.target) {
+        return state;
+      }
+
+      if (connection.source === connection.target) {
+        return state;
+      }
+
+      const duplicated = state.edges.some(
+        (edge) =>
+          edge.source === connection.source &&
+          edge.target === connection.target &&
+          (edge.sourceHandle ?? null) === (connection.sourceHandle ?? null) &&
+          (edge.targetHandle ?? null) === (connection.targetHandle ?? null)
+      );
+      if (duplicated) {
+        return state;
+      }
+
+      return {
+        edges: addEdge(
+          {
+            id: createId("edge"),
+            source: connection.source,
+            target: connection.target,
+            sourceHandle: connection.sourceHandle ?? undefined,
+            targetHandle: connection.targetHandle ?? undefined
+          },
+          state.edges
+        ) as BuilderFlowEdge[]
+      };
+    }),
 
   addNodeFromPalette: (nodeType) =>
     set((state) => {

@@ -1,5 +1,6 @@
 import { useCallback, useMemo } from "react";
 import ReactFlow, { Background, Controls, MiniMap } from "reactflow";
+import type { Connection } from "reactflow";
 
 import type { BuilderNodeData } from "@/lib/reactflow/rf.types";
 import { useFlowStore } from "@/state/flow.store";
@@ -41,6 +42,29 @@ export function FlowCanvas() {
     selectNode(null);
   }, [selectNode]);
 
+  const isValidConnection = useCallback(
+    (connection: Connection) => {
+      if (!connection.source || !connection.target) {
+        return false;
+      }
+
+      if (connection.source === connection.target) {
+        return false;
+      }
+
+      const duplicated = edges.some(
+        (edge) =>
+          edge.source === connection.source &&
+          edge.target === connection.target &&
+          (edge.sourceHandle ?? null) === (connection.sourceHandle ?? null) &&
+          (edge.targetHandle ?? null) === (connection.targetHandle ?? null)
+      );
+
+      return !duplicated;
+    },
+    [edges]
+  );
+
   return (
     <div className="flow-canvas">
       <ReactFlow
@@ -53,6 +77,10 @@ export function FlowCanvas() {
         onConnect={onConnect}
         onNodeClick={handleNodeClick}
         onPaneClick={handlePaneClick}
+        isValidConnection={isValidConnection}
+        nodesConnectable
+        nodesDraggable
+        elementsSelectable
       >
         <Background gap={24} size={1.2} />
         <MiniMap pannable zoomable />

@@ -19,6 +19,7 @@ export const CONTRACT_NODE_TYPE_BY_UI: Record<BuilderNodeType, ContractNodeType>
 
 export const UI_NODE_TYPE_BY_CONTRACT: Record<ContractNodeType, BuilderNodeType> = {
   start: "memory",
+  memory: "memory",
   router: "orchestrator",
   validator: "validator",
   tool: "tool",

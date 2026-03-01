@@ -17,7 +17,7 @@ function stringifyRules(rules: ValidationRule[]): string {
 }
 
 export function ValidatorForm({ data, onChange }: ValidatorFormProps) {
-  const initialDraft = useMemo(() => stringifyRules(data.rules), [data.rules]);
+  const initialDraft = useMemo(() => stringifyRules(data.rules ?? []), [data.rules]);
   const [rulesDraft, setRulesDraft] = useState(initialDraft);
   const [rulesError, setRulesError] = useState<string | null>(null);
 

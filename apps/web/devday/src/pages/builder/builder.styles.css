@@ -227,6 +227,7 @@
 }
 
 .node-card {
+  position: relative;
   min-width: 172px;
   max-width: 220px;
   border-radius: 12px;
@@ -264,6 +265,27 @@
   white-space: nowrap;
   text-overflow: ellipsis;
   overflow: hidden;
+}
+
+.rf-handle {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 2px solid #ffffff;
+  background: #0f766e;
+  box-shadow: 0 0 0 1px rgba(15, 118, 110, 0.35);
+}
+
+.rf-handle--in {
+  background: #334155;
+}
+
+.rf-handle--out {
+  background: #0f766e;
+}
+
+.rf-handle--out-alt {
+  background: #1d4ed8;
 }
 
 .node-card--memory {

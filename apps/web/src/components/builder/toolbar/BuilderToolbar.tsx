@@ -1,11 +1,10 @@
 import {
-  FolderOpen,
   RotateCcw,
   Save,
   ShieldCheck
 } from "lucide-react";
 import { ChevronDown, MessageSquare, PanelLeft, PanelRight } from "lucide-react";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 import { useFlowStore } from "@/state/flow.store";
 import { useUiStore } from "@/state/ui.store";
@@ -20,11 +19,9 @@ export function BuilderToolbar() {
   const validation = useFlowStore((state) => state.validation);
   const isValidating = useFlowStore((state) => state.isValidating);
   const isSaving = useFlowStore((state) => state.isSaving);
-  const isLoading = useFlowStore((state) => state.isLoading);
   const lastError = useFlowStore((state) => state.lastError);
   const setFlowMeta = useFlowStore((state) => state.setFlowMeta);
   const resetFlow = useFlowStore((state) => state.resetFlow);
-  const loadFlowById = useFlowStore((state) => state.loadFlowById);
   const validateFlow = useFlowStore((state) => state.validateFlow);
   const saveFlow = useFlowStore((state) => state.saveFlow);
 
@@ -32,17 +29,25 @@ export function BuilderToolbar() {
   const toggleRightSidebar = useUiStore((state) => state.toggleRightSidebar);
   const toggleChat = useUiStore((state) => state.toggleChat);
   const visualizationDropdownRef = useRef<HTMLDetailsElement>(null);
+  const [isValidatePending, setValidatePending] = useState(false);
+  const [isSavePending, setSavePending] = useState(false);
 
-  const handleLoad = () => {
-    void loadFlowById(flowId);
+  const handleValidate = async () => {
+    setValidatePending(true);
+    try {
+      await validateFlow();
+    } finally {
+      setValidatePending(false);
+    }
   };
 
-  const handleValidate = () => {
-    void validateFlow();
-  };
-
-  const handleSave = () => {
-    void saveFlow();
+  const handleSave = async () => {
+    setSavePending(true);
+    try {
+      await saveFlow();
+    } finally {
+      setSavePending(false);
+    }
   };
 
   const handleVisualizationAction = (action: () => void) => {
@@ -95,22 +100,16 @@ export function BuilderToolbar() {
           className="is-muted"
         />
         <ToolbarActionButton
-          label={isLoading ? "Cargando..." : "Cargar"}
-          icon={<FolderOpen size={14} />}
-          onClick={handleLoad}
-          disabled={isLoading}
-        />
-        <ToolbarActionButton
-          label={isValidating ? "Validando..." : "Validar"}
+          label={isValidatePending || isValidating ? "Validando..." : "Validar"}
           icon={<ShieldCheck size={14} />}
-          onClick={handleValidate}
-          disabled={isValidating}
+          onClick={() => void handleValidate()}
+          disabled={isValidatePending || isValidating}
         />
         <ToolbarActionButton
-          label={isSaving ? "Guardando..." : "Guardar"}
+          label={isSavePending || isSaving ? "Guardando..." : "Guardar"}
           icon={<Save size={14} />}
-          onClick={handleSave}
-          disabled={isSaving}
+          onClick={() => void handleSave()}
+          disabled={isSavePending || isSaving}
         />
         <details className="toolbar-dropdown" ref={visualizationDropdownRef}>
           <summary className="toolbar-dropdown__trigger">

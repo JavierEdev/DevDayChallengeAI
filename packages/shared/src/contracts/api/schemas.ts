@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { idSchema, metadataSchema } from "../common.js";
+import { flowDefinitionSchema } from "../flow/schemas.js";
 import {
   runtimeStatusSchema,
   sessionMessageSchema,
@@ -32,6 +33,27 @@ export const sendMessageResponseSchema = z.object({
   status: runtimeStatusSchema,
   trace: z.array(traceEventSchema),
   assistantMessage: sessionMessageSchema.optional()
+});
+
+export const createFlowRequestSchema = flowDefinitionSchema;
+
+export const createFlowResponseSchema = z.object({
+  flow: flowDefinitionSchema
+});
+
+export const getFlowResponseSchema = z.object({
+  flow: flowDefinitionSchema
+});
+
+export const updateFlowRequestSchema = flowDefinitionSchema;
+
+export const updateFlowResponseSchema = z.object({
+  flow: flowDefinitionSchema
+});
+
+export const deleteFlowResponseSchema = z.object({
+  flowId: idSchema,
+  deleted: z.boolean()
 });
 
 export const flowValidationSeveritySchema = z.enum(["error", "warning"]);

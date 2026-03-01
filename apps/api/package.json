@@ -1,0 +1,25 @@
+{
+  "name": "@devday/api",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@devday/shared": "file:../../packages/shared",
+    "@fastify/swagger": "^9.7.0",
+    "@fastify/swagger-ui": "^5.2.5",
+    "@langchain/core": "^1.1.29",
+    "@langchain/google-genai": "^2.1.22",
+    "dotenv": "^17.3.1",
+    "fastify": "^5.7.4"
+  },
+  "devDependencies": {
+    "@types/node": "^24.6.0",
+    "tsx": "^4.21.0"
+  }
+}

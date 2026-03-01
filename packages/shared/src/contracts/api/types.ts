@@ -1,5 +1,6 @@
 import type { RuntimeStatus } from "../runtime/enums.js";
 import type { SessionMessage, SessionState, TraceEvent } from "../runtime/types.js";
+import type { FlowDefinition } from "../flow/types.js";
 
 export interface CreateSessionRequest {
   flowId: string;
@@ -25,6 +26,27 @@ export interface SendMessageResponse {
   status: RuntimeStatus;
   trace: TraceEvent[];
   assistantMessage?: SessionMessage;
+}
+
+export type CreateFlowRequest = FlowDefinition;
+
+export interface CreateFlowResponse {
+  flow: FlowDefinition;
+}
+
+export interface GetFlowResponse {
+  flow: FlowDefinition;
+}
+
+export type UpdateFlowRequest = FlowDefinition;
+
+export interface UpdateFlowResponse {
+  flow: FlowDefinition;
+}
+
+export interface DeleteFlowResponse {
+  flowId: string;
+  deleted: boolean;
 }
 
 export interface FlowValidationIssue {

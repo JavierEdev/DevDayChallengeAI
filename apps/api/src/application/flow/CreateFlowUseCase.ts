@@ -14,6 +14,8 @@ export class CreateFlowUseCase {
       throw new FlowAlreadyExistsError(flowId);
     }
 
+    console.log("Creating flow with ID:", flowId);
+
     const nowIso = new Date().toISOString();
     const flowDefinition = {
       ...input,

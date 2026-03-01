@@ -7,7 +7,7 @@ import type { HandleTelegramMessageUseCase } from "../../application/channel/Han
 
 export interface ITelegramRoutesDependencies {
   telegramWebhookSecret: string;
-  telegramDefaultFlowId: string;
+  telegramDefaultFlowId?: string;
   handleTelegramMessageUseCase: HandleTelegramMessageUseCase;
 }
 
@@ -96,7 +96,7 @@ export function registerTelegramRoutes(
         await dependencies.handleTelegramMessageUseCase.execute({
           externalChatId,
           text,
-          flowId: dependencies.telegramDefaultFlowId
+          fallbackFlowId: dependencies.telegramDefaultFlowId
         });
 
         return reply.code(200).send({ ok: true });

@@ -76,6 +76,7 @@ async function bootstrap(): Promise<void> {
     ? new HandleTelegramMessageUseCase(
         externalSessionLinkStore,
         createSessionUseCase,
+        getFlowUseCase,
         runConversationTurnUseCase,
         new TelegramBotApiSender({
           botToken: telegramChannelConfig.botToken
@@ -126,7 +127,7 @@ async function bootstrap(): Promise<void> {
         await handleTelegramMessageUseCase.execute({
           externalChatId,
           text,
-          flowId: telegramChannelConfig.defaultFlowId
+          fallbackFlowId: telegramChannelConfig.defaultFlowId
         });
       }
     });
@@ -228,16 +229,16 @@ interface ITelegramChannelConfig {
   botToken: string;
   transport: "webhook" | "polling";
   webhookSecret?: string;
-  defaultFlowId: string;
+  defaultFlowId?: string;
 }
 
 function resolveTelegramChannelConfig(env: NodeJS.ProcessEnv): ITelegramChannelConfig | undefined {
   const botToken = env.TELEGRAM_BOT_TOKEN?.trim();
-  const defaultFlowId = env.TELEGRAM_DEFAULT_FLOW_ID?.trim();
+  const defaultFlowId = env.TELEGRAM_DEFAULT_FLOW_ID?.trim() || undefined;
   const transport = resolveTelegramTransport(env.TELEGRAM_TRANSPORT);
   const webhookSecret = env.TELEGRAM_WEBHOOK_SECRET?.trim();
 
-  if (!botToken || !defaultFlowId) {
+  if (!botToken) {
     return undefined;
   }
   if (transport === "webhook" && !webhookSecret) {
@@ -248,7 +249,7 @@ function resolveTelegramChannelConfig(env: NodeJS.ProcessEnv): ITelegramChannelC
     botToken,
     transport,
     ...(webhookSecret ? { webhookSecret } : {}),
-    defaultFlowId
+    ...(defaultFlowId ? { defaultFlowId } : {})
   };
 }
 

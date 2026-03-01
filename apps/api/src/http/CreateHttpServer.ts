@@ -100,8 +100,7 @@ export async function createHttpServer(
 
   if (
     dependencies.handleTelegramMessageUseCase &&
-    dependencies.telegramWebhookSecret &&
-    dependencies.telegramDefaultFlowId
+    dependencies.telegramWebhookSecret
   ) {
     registerTelegramRoutes(fastify, {
       handleTelegramMessageUseCase: dependencies.handleTelegramMessageUseCase,

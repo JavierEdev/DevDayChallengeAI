@@ -11,5 +11,8 @@
     "dev:web": "pnpm --filter web dev",
     "build": "pnpm -r --if-present build",
     "typecheck": "pnpm -r --if-present typecheck"
+  },
+  "volta": {
+    "node": "25.7.0"
   }
 }

@@ -1,16 +1,11 @@
-import type { StartNodeData } from "@shared/contracts/flow/types";
-
-interface StartFormProps {
-  data: StartNodeData;
-  onChange: (patch: Partial<StartNodeData>) => void;
-}
+import type { StartFormProps } from "../interfaces/StartFormProps";
 
 function optionalText(value: string): string | undefined {
   const next = value.trim();
   return next.length > 0 ? next : undefined;
 }
 
-export function StartForm({ data, onChange }: StartFormProps) {
+export function StartForm({ data, onChange }: Readonly<StartFormProps>) {
   return (
     <div className="inspector-form">
       <div className="inspector-field">

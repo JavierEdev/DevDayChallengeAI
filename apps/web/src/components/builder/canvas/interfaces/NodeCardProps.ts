@@ -1,4 +1,3 @@
-
 import type { ReactNode } from "react";
 
 interface NodeCardProps {
@@ -8,6 +7,6 @@ interface NodeCardProps {
   title: string;
   summary: string;
   children?: ReactNode;
-};
+}
 
 export type { NodeCardProps };

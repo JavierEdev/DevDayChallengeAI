@@ -1,6 +1,7 @@
 import type { FormEvent } from "react";
 
 import { useChatStore } from "@/state/chat.store";
+import { FOOTER_CHAT_TEXT } from "./data/footerChatText";
 
 export function ChatInput() {
   const input = useChatStore((state) => state.input);
@@ -18,11 +19,11 @@ export function ChatInput() {
       <input
         className="chat-input__textbox"
         value={input}
-        placeholder="Escribe un mensaje para probar el flujo..."
+        placeholder={FOOTER_CHAT_TEXT.inputPlaceholder}
         onChange={(event) => setInput(event.target.value)}
       />
       <button type="submit" className="chat-input__send" disabled={isSending}>
-        {isSending ? "..." : "Enviar"}
+        {isSending ? FOOTER_CHAT_TEXT.sendingShort : FOOTER_CHAT_TEXT.sendButton}
       </button>
     </form>
   );

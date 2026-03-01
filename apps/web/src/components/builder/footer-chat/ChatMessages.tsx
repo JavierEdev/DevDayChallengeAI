@@ -1,5 +1,6 @@
 import { useChatStore } from "@/state/chat.store";
 
+import { FOOTER_CHAT_TEXT } from "./data/footerChatText";
 import { ChatMessageBubble } from "./ChatMessageBubble";
 
 export function ChatMessages() {
@@ -9,7 +10,7 @@ export function ChatMessages() {
   if (messages.length === 0) {
     return (
       <div className="chat-messages">
-        <p className="muted">No hay mensajes todavía. Inicia la conversación.</p>
+        <p className="muted">{FOOTER_CHAT_TEXT.emptyMessages}</p>
       </div>
     );
   }
@@ -19,7 +20,7 @@ export function ChatMessages() {
       {messages.map((message) => (
         <ChatMessageBubble key={message.id} message={message} />
       ))}
-      {isSending ? <p className="muted">Enviando...</p> : null}
+      {isSending ? <p className="muted">{FOOTER_CHAT_TEXT.sendingStatus}</p> : null}
     </div>
   );
 }

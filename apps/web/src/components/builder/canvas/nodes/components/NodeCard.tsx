@@ -1,5 +1,5 @@
 import { Handle, Position } from "reactflow";
-import type { NodeCardProps } from "./models/NodeCardProps";
+import type { NodeCardProps } from "../../interfaces/NodeCardProps";
 
 
 export function NodeCard({ variant, selected, eyebrow, title, summary, children }: NodeCardProps) {

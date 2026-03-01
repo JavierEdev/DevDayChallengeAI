@@ -1,16 +1,11 @@
-import type { ResponseNodeData } from "@shared/contracts/flow/types";
-
-interface GenericFormProps {
-  data: ResponseNodeData;
-  onChange: (patch: Partial<ResponseNodeData>) => void;
-}
+import type { GenericFormProps } from "../interfaces/GenericFormProps";
 
 function optionalText(value: string): string | undefined {
   const next = value.trim();
   return next.length > 0 ? next : undefined;
 }
 
-export function GenericForm({ data, onChange }: GenericFormProps) {
+export function GenericForm({ data, onChange }: Readonly<GenericFormProps>) {
   return (
     <div className="inspector-form">
       <div className="inspector-field">

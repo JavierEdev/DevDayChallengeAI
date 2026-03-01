@@ -1,16 +1,12 @@
 import type { MemoryNodeData } from "@shared/contracts/flow/types";
-
-interface MemoryFormProps {
-  data: MemoryNodeData;
-  onChange: (patch: Partial<MemoryNodeData>) => void;
-}
+import type { MemoryFormProps } from "../interfaces/MemoryFormProps";
 
 function optionalText(value: string): string | undefined {
   const next = value.trim();
   return next.length > 0 ? next : undefined;
 }
 
-export function MemoryForm({ data, onChange }: MemoryFormProps) {
+export function MemoryForm({ data, onChange }: Readonly<MemoryFormProps>) {
   return (
     <div className="inspector-form">
       <div className="inspector-field">

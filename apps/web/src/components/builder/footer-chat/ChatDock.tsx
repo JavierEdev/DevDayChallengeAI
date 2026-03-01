@@ -1,4 +1,5 @@
 import { useChatStore } from "@/state/chat.store";
+import { FOOTER_CHAT_TEXT } from "./data/footerChatText";
 
 import { ChatInput } from "./ChatInput";
 import { ChatMessages } from "./ChatMessages";
@@ -12,13 +13,13 @@ export function ChatDock() {
     <section className="chat-dock">
       <header className="chat-dock__header">
         <div>
-          <p className="panel-title">Runtime Chat</p>
+          <p className="panel-title">{FOOTER_CHAT_TEXT.title}</p>
           <p className="panel-subtitle">
-            {sessionId ? `session: ${sessionId}` : "sin sesion iniciada"}
+            {sessionId ? `session: ${sessionId}` : FOOTER_CHAT_TEXT.noSession}
           </p>
         </div>
         <button type="button" className="inspector-button is-muted" onClick={resetChat}>
-          Limpiar
+          {FOOTER_CHAT_TEXT.clearButton}
         </button>
       </header>
       <ChatMessages />

@@ -8,24 +8,7 @@ import {
   type BuilderNodeData
 } from "@/lib/reactflow/rf.types";
 import { useFlowStore } from "@/state/flow.store";
-
-import { GenericNode } from "./nodes/GenericNode";
-import { MemoryNode } from "./nodes/MemoryNode";
-import { OrchestratorNode } from "./nodes/OrchestratorNode";
-import { SpecialistNode } from "./nodes/SpecialistNode";
-import { StartNode } from "./nodes/StartNode";
-import { ToolNode } from "./nodes/ToolNode";
-import { ValidatorNode } from "./nodes/ValidatorNode";
-
-const nodeTypes = {
-  start: StartNode,
-  memory: MemoryNode,
-  orchestrator: OrchestratorNode,
-  validator: ValidatorNode,
-  specialist: SpecialistNode,
-  generic: GenericNode,
-  tool: ToolNode
-};
+import { flowNodeTypes } from "./data/flowNodeTypes";
 
 export function FlowCanvas() {
   const { screenToFlowPosition } = useReactFlow();
@@ -37,7 +20,7 @@ export function FlowCanvas() {
   const addNodeFromPalette = useFlowStore((state) => state.addNodeFromPalette);
   const selectNode = useFlowStore((state) => state.selectNode);
 
-  const typedNodeTypes = useMemo(() => nodeTypes, []);
+  const typedNodeTypes = useMemo(() => flowNodeTypes, []);
 
   const handleNodeClick = useCallback(
     (_event: React.MouseEvent, node: { id: string; data: BuilderNodeData }) => {

@@ -5,4 +5,3 @@ interface ChatMessageBubbleProps {
 }
 
 export type { ChatMessageBubbleProps };
-

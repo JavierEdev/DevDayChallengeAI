@@ -1,45 +1,9 @@
 import { useEffect, useState } from "react";
 
-import type { ToolNodeData } from "@shared/contracts/flow/types";
-
 import { listJsonDatasets } from "@/services/json-tools.api";
-
-interface ToolFormProps {
-  data: ToolNodeData;
-  onChange: (patch: Partial<ToolNodeData>) => void;
-}
-
-interface ToolPreset {
-  key: string;
-  label: string;
-  toolName: string;
-  instructions: string;
-  outputVariable: string;
-}
-
-const TOOL_PRESETS: ToolPreset[] = [
-  {
-    key: "faq",
-    label: "Consultas Generales",
-    toolName: "faqs",
-    instructions: "Busca informacion de horarios, ubicacion, financiamiento y garantias.",
-    outputVariable: "tool_context_faq"
-  },
-  {
-    key: "catalogo",
-    label: "Catalogo Vehiculos",
-    toolName: "catalogo",
-    instructions: "Busca vehiculos segun presupuesto, tipo y disponibilidad.",
-    outputVariable: "tool_context_catalogo"
-  },
-  {
-    key: "agenda",
-    label: "Agendamiento Cita",
-    toolName: "agenda",
-    instructions: "Busca disponibilidad de fechas y horarios para citas.",
-    outputVariable: "tool_context_agenda"
-  }
-];
+import { TOOL_PRESETS } from "../data/ToolPresetsData";
+import type { ToolFormProps } from "../interfaces/ToolFormProps";
+import type { ToolPreset } from "../interfaces/ToolPreset";
 
 function optionalText(value: string): string | undefined {
   const next = value.trim();
@@ -55,7 +19,7 @@ function optionalInt(value: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-export function ToolForm({ data, onChange }: ToolFormProps) {
+export function ToolForm({ data, onChange }: Readonly<ToolFormProps>) {
   const [datasetNames, setDatasetNames] = useState<string[]>([]);
 
   useEffect(() => {

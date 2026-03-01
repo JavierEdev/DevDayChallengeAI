@@ -8,13 +8,18 @@ import { DeleteFlowUseCase } from "./application/flow/DeleteFlowUseCase.js";
 import { GetFlowUseCase } from "./application/flow/GetFlowUseCase.js";
 import { UpdateFlowUseCase } from "./application/flow/UpdateFlowUseCase.js";
 import { RunConversationTurnUseCase } from "./application/chat/RunConversationTurnUseCase.js";
+import { HandleTelegramMessageUseCase } from "./application/channel/HandleTelegramMessageUseCase.js";
 import { CreateSessionUseCase } from "./application/session/CreateSessionUseCase.js";
 import { ValidateFlowUseCase } from "./application/flow/ValidateFlowUseCase.js";
 import type { IFlowRepository } from "./domain/flow/IFlowRepository.js";
+import type { IExternalSessionLinkStore } from "./domain/session/IExternalSessionLinkStore.js";
 import type { ISessionStateStore } from "./domain/session/ISessionStateStore.js";
 import type { IToolRepository } from "./domain/tool/IToolRepository.js";
 import { createAgentLlmPortFromEnv } from "./infrastructure/llm/CreateAgentLlmPort.js";
+import { TelegramBotApiSender } from "./infrastructure/channel/telegram/TelegramBotApiSender.js";
+import { TelegramLongPollingRunner } from "./infrastructure/channel/telegram/TelegramLongPollingRunner.js";
 import { InMemoryFlowRepository } from "./infrastructure/flow/InMemoryFlowRepository.js";
+import { InMemoryExternalSessionLinkStore } from "./infrastructure/session/InMemoryExternalSessionLinkStore.js";
 import { InMemorySessionStateStore } from "./infrastructure/session/InMemorySessionStateStore.js";
 import { InMemoryToolRepository } from "./infrastructure/tool/InMemoryToolRepository.js";
 import { loadToolDatasetsFromLocalJson } from "./infrastructure/tool/LoadToolDatasetsFromLocalJson.js";
@@ -32,7 +37,8 @@ async function bootstrap(): Promise<void> {
   const {
     flowRepository,
     sessionStateStore,
-    toolRepository
+    toolRepository,
+    externalSessionLinkStore
   } = createInMemoryAdapters();
   console.info("[bootstrap] persistence_driver=memory");
   const createFlowUseCase = new CreateFlowUseCase(flowRepository);
@@ -65,6 +71,22 @@ async function bootstrap(): Promise<void> {
     }
   );
   const validateFlowUseCase = new ValidateFlowUseCase();
+  const telegramChannelConfig = resolveTelegramChannelConfig(process.env);
+  const handleTelegramMessageUseCase = telegramChannelConfig
+    ? new HandleTelegramMessageUseCase(
+        externalSessionLinkStore,
+        createSessionUseCase,
+        runConversationTurnUseCase,
+        new TelegramBotApiSender({
+          botToken: telegramChannelConfig.botToken
+        })
+      )
+    : undefined;
+  if (telegramChannelConfig) {
+    console.info(`[bootstrap] channel_driver=telegram enabled transport=${telegramChannelConfig.transport}`);
+  } else {
+    console.info("[bootstrap] channel_driver=telegram disabled (missing env configuration)");
+  }
 
   //Creacion y arranque del servidor HTTP
   const httpServer = await createHttpServer({
@@ -74,7 +96,11 @@ async function bootstrap(): Promise<void> {
     deleteFlowUseCase,
     createSessionUseCase,
     runConversationTurnUseCase,
-    validateFlowUseCase
+    validateFlowUseCase,
+    handleTelegramMessageUseCase,
+    telegramWebhookSecret:
+      telegramChannelConfig?.transport === "webhook" ? telegramChannelConfig.webhookSecret : undefined,
+    telegramDefaultFlowId: telegramChannelConfig?.defaultFlowId
   });
 
   const port = Number(process.env.PORT ?? "3000");
@@ -82,6 +108,30 @@ async function bootstrap(): Promise<void> {
     throw new Error(`Invalid PORT value: ${process.env.PORT ?? "(undefined)"}`);
   }
   await httpServer.listen({ port, host: "127.0.0.1" });
+
+  if (telegramChannelConfig?.transport === "polling" && handleTelegramMessageUseCase) {
+    const pollingTimeoutSeconds = parseOptionalPositiveInteger(
+      process.env.TELEGRAM_POLLING_TIMEOUT_SECONDS,
+      "TELEGRAM_POLLING_TIMEOUT_SECONDS"
+    );
+    const pollingRetryDelayMs = parseOptionalPositiveInteger(
+      process.env.TELEGRAM_POLLING_RETRY_DELAY_MS,
+      "TELEGRAM_POLLING_RETRY_DELAY_MS"
+    );
+    const telegramPollingRunner = new TelegramLongPollingRunner({
+      botToken: telegramChannelConfig.botToken,
+      ...(pollingTimeoutSeconds !== undefined ? { pollingTimeoutSeconds } : {}),
+      ...(pollingRetryDelayMs !== undefined ? { retryDelayMs: pollingRetryDelayMs } : {}),
+      onTextMessage: async ({ externalChatId, text }) => {
+        await handleTelegramMessageUseCase.execute({
+          externalChatId,
+          text,
+          flowId: telegramChannelConfig.defaultFlowId
+        });
+      }
+    });
+    telegramPollingRunner.start();
+  }
 }
 
 bootstrap().catch((error) => {
@@ -93,11 +143,13 @@ function createInMemoryAdapters(): {
   flowRepository: IFlowRepository;
   sessionStateStore: ISessionStateStore;
   toolRepository: IToolRepository;
+  externalSessionLinkStore: IExternalSessionLinkStore;
 } {
   return {
     flowRepository: new InMemoryFlowRepository(),
     sessionStateStore: new InMemorySessionStateStore(),
-    toolRepository: createLocalJsonToolRepository()
+    toolRepository: createLocalJsonToolRepository(),
+    externalSessionLinkStore: new InMemoryExternalSessionLinkStore()
   };
 }
 
@@ -170,4 +222,45 @@ function parseOptionalBoolean(
   }
 
   throw new Error(`Invalid boolean for ${variableName}: ${value}`);
+}
+
+interface ITelegramChannelConfig {
+  botToken: string;
+  transport: "webhook" | "polling";
+  webhookSecret?: string;
+  defaultFlowId: string;
+}
+
+function resolveTelegramChannelConfig(env: NodeJS.ProcessEnv): ITelegramChannelConfig | undefined {
+  const botToken = env.TELEGRAM_BOT_TOKEN?.trim();
+  const defaultFlowId = env.TELEGRAM_DEFAULT_FLOW_ID?.trim();
+  const transport = resolveTelegramTransport(env.TELEGRAM_TRANSPORT);
+  const webhookSecret = env.TELEGRAM_WEBHOOK_SECRET?.trim();
+
+  if (!botToken || !defaultFlowId) {
+    return undefined;
+  }
+  if (transport === "webhook" && !webhookSecret) {
+    throw new Error("Missing TELEGRAM_WEBHOOK_SECRET for webhook transport");
+  }
+
+  return {
+    botToken,
+    transport,
+    ...(webhookSecret ? { webhookSecret } : {}),
+    defaultFlowId
+  };
+}
+
+function resolveTelegramTransport(value: string | undefined): "webhook" | "polling" {
+  if (!value) {
+    return "polling";
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "polling" || normalized === "webhook") {
+    return normalized;
+  }
+
+  throw new Error(`Invalid TELEGRAM_TRANSPORT value: ${value}`);
 }

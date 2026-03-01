@@ -1,8 +1,4 @@
-interface InspectorHeaderProps {
-  nodeId: string;
-  contractType: string;
-  onDeleteNode?: () => void;
-}
+import type { InspectorHeaderProps } from "./interfaces/InspectorHeaderProps";
 
 export function InspectorHeader({ nodeId, contractType, onDeleteNode }: Readonly<InspectorHeaderProps>) {
   return (

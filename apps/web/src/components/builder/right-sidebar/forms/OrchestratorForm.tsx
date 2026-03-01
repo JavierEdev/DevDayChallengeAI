@@ -1,43 +1,15 @@
 import type { RouterNodeData } from "@shared/contracts/flow/types";
+import { ORCHESTRATOR_PRESETS } from "../data/OrchestratorPresetsData";
+import type { OrchestratorFormProps } from "../interfaces/OrchestratorFormProps";
+import type { OrchestratorPreset } from "../interfaces/OrchestratorPreset";
 
-interface OrchestratorFormProps {
-  data: RouterNodeData;
-  onChange: (patch: Partial<RouterNodeData>) => void;
-}
-
-interface OrchestratorPreset {
-  key: string;
-  label: string;
-  instructions: string;
-}
-
-const ORCHESTRATOR_PRESETS: OrchestratorPreset[] = [
-  {
-    key: "faq",
-    label: "Consultas Generales",
-    instructions:
-      "Detecta preguntas de horarios, ubicacion, financiamiento y garantias. Enruta a la salida etiquetada como faqs o consultas."
-  },
-  {
-    key: "catalogo",
-    label: "Catalogo Vehiculos",
-    instructions:
-      "Detecta intencion de buscar, comparar o recomendar autos por presupuesto, tipo y disponibilidad. Enruta a la salida etiquetada como catalogo."
-  },
-  {
-    key: "agenda",
-    label: "Agendamiento Cita",
-    instructions:
-      "Detecta intencion de agendar cita, prueba de manejo o asesoria por fecha y hora. Enruta a la salida etiquetada como agenda."
-  }
-];
 
 function optionalText(value: string): string | undefined {
   const next = value.trim();
   return next.length > 0 ? next : undefined;
 }
 
-export function OrchestratorForm({ data, onChange }: OrchestratorFormProps) {
+export function OrchestratorForm({ data, onChange }: Readonly<OrchestratorFormProps>) {
   const applyPreset = (preset: OrchestratorPreset) => {
     onChange({
       strategy: "intent",

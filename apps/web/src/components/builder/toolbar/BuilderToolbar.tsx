@@ -1,14 +1,11 @@
-import {
-  RotateCcw,
-  Save,
-  ShieldCheck
-} from "lucide-react";
+import { RotateCcw, Save, ShieldCheck } from "lucide-react";
 import { ChevronDown, MessageSquare, PanelLeft, PanelRight } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { useFlowStore } from "@/state/flow.store";
 import { useUiStore } from "@/state/ui.store";
 
+import { TOOLBAR_TEXT } from "./data/toolbarText";
 import { ToolbarActionButton } from "./ToolbarActionButton";
 
 export function BuilderToolbar() {
@@ -61,7 +58,7 @@ export function BuilderToolbar() {
     <section className="toolbar">
       <div className="toolbar__group">
         <div className="toolbar__field">
-          <label htmlFor="toolbar-flow-id">Flow ID</label>
+          <label htmlFor="toolbar-flow-id">{TOOLBAR_TEXT.flowIdLabel}</label>
           <input
             id="toolbar-flow-id"
             value={flowId}
@@ -69,7 +66,7 @@ export function BuilderToolbar() {
           />
         </div>
         <div className="toolbar__field">
-          <label htmlFor="toolbar-flow-name">Nombre</label>
+          <label htmlFor="toolbar-flow-name">{TOOLBAR_TEXT.flowNameLabel}</label>
           <input
             id="toolbar-flow-name"
             value={flowName}
@@ -80,12 +77,12 @@ export function BuilderToolbar() {
 
       <div className="toolbar__group">
         <span className="status-pill">
-          {nodesCount} nodos • {edgesCount} edges
+          {nodesCount} {TOOLBAR_TEXT.nodesLabel} - {edgesCount} {TOOLBAR_TEXT.edgesLabel}
         </span>
         {validation ? (
           <span className={`status-pill ${validation.valid ? "" : "is-error"}`}>
             {validation.valid
-              ? "valido"
+              ? TOOLBAR_TEXT.valid
               : `${validation.errors.length} error(es), ${validation.warnings.length} warning(s)`}
           </span>
         ) : null}
@@ -94,19 +91,19 @@ export function BuilderToolbar() {
 
       <div className="toolbar__group">
         <ToolbarActionButton
-          label="Reset"
+          label={TOOLBAR_TEXT.reset}
           icon={<RotateCcw size={14} />}
           onClick={resetFlow}
           className="is-muted"
         />
         <ToolbarActionButton
-          label={isValidatePending || isValidating ? "Validando..." : "Validar"}
+          label={isValidatePending || isValidating ? TOOLBAR_TEXT.validating : TOOLBAR_TEXT.validate}
           icon={<ShieldCheck size={14} />}
           onClick={() => void handleValidate()}
           disabled={isValidatePending || isValidating}
         />
         <ToolbarActionButton
-          label={isSavePending || isSaving ? "Guardando..." : "Guardar"}
+          label={isSavePending || isSaving ? TOOLBAR_TEXT.saving : TOOLBAR_TEXT.save}
           icon={<Save size={14} />}
           onClick={() => void handleSave()}
           disabled={isSavePending || isSaving}
@@ -114,25 +111,25 @@ export function BuilderToolbar() {
         <details className="toolbar-dropdown" ref={visualizationDropdownRef}>
           <summary className="toolbar-dropdown__trigger">
             <span className="toolbar-action__content">
-              <span>Visualizacion</span>
+              <span>{TOOLBAR_TEXT.visualization}</span>
               <ChevronDown size={14} aria-hidden="true" />
             </span>
           </summary>
           <div className="toolbar-dropdown__menu">
             <ToolbarActionButton
-              label="Palette"
+              label={TOOLBAR_TEXT.palette}
               icon={<PanelLeft size={14} />}
               onClick={() => handleVisualizationAction(toggleLeftSidebar)}
               className="is-muted toolbar-dropdown__item"
             />
             <ToolbarActionButton
-              label="Inspector"
+              label={TOOLBAR_TEXT.inspector}
               icon={<PanelRight size={14} />}
               onClick={() => handleVisualizationAction(toggleRightSidebar)}
               className="is-muted toolbar-dropdown__item"
             />
             <ToolbarActionButton
-              label="Chat"
+              label={TOOLBAR_TEXT.chat}
               icon={<MessageSquare size={14} />}
               onClick={() => handleVisualizationAction(toggleChat)}
               className="is-muted toolbar-dropdown__item"

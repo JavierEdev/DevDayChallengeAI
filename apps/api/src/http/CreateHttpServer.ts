@@ -10,9 +10,11 @@ import type { UpdateFlowUseCase } from "../application/flow/UpdateFlowUseCase.js
 import type { RunConversationTurnUseCase } from "../application/chat/RunConversationTurnUseCase.js";
 import type { CreateSessionUseCase } from "../application/session/CreateSessionUseCase.js";
 import type { ValidateFlowUseCase } from "../application/flow/ValidateFlowUseCase.js";
+import type { HandleTelegramMessageUseCase } from "../application/channel/HandleTelegramMessageUseCase.js";
 import { registerChatRoutes } from "./routes/ChatRoutes.js";
 import { registerFlowRoutes } from "./routes/FlowRoutes.js";
 import { registerSessionRoutes } from "./routes/SessionRoutes.js";
+import { registerTelegramRoutes } from "./routes/TelegramRoutes.js";
 
 export interface ICreateHttpServerDependencies {
   createFlowUseCase: CreateFlowUseCase;
@@ -22,6 +24,9 @@ export interface ICreateHttpServerDependencies {
   createSessionUseCase: CreateSessionUseCase;
   runConversationTurnUseCase: RunConversationTurnUseCase;
   validateFlowUseCase: ValidateFlowUseCase;
+  handleTelegramMessageUseCase?: HandleTelegramMessageUseCase;
+  telegramWebhookSecret?: string;
+  telegramDefaultFlowId?: string;
 }
 
 export async function createHttpServer(
@@ -51,7 +56,8 @@ export async function createHttpServer(
         { name: "Health", description: "Health checks del API" },
         { name: "Sessions", description: "Gestion de sesiones de chat runtime" },
         { name: "Chat", description: "Mensajeria y ejecucion conversacional" },
-        { name: "Flows", description: "Gestion y validacion de definiciones de flujo" }
+        { name: "Flows", description: "Gestion y validacion de definiciones de flujo" },
+        { name: "Channels", description: "Integraciones de canales externos" }
       ]
     }
   });
@@ -91,6 +97,18 @@ export async function createHttpServer(
     deleteFlowUseCase: dependencies.deleteFlowUseCase,
     validateFlowUseCase: dependencies.validateFlowUseCase
   });
+
+  if (
+    dependencies.handleTelegramMessageUseCase &&
+    dependencies.telegramWebhookSecret &&
+    dependencies.telegramDefaultFlowId
+  ) {
+    registerTelegramRoutes(fastify, {
+      handleTelegramMessageUseCase: dependencies.handleTelegramMessageUseCase,
+      telegramWebhookSecret: dependencies.telegramWebhookSecret,
+      telegramDefaultFlowId: dependencies.telegramDefaultFlowId
+    });
+  }
 
   await fastify.register(swaggerUi, {
     routePrefix: "/docs",

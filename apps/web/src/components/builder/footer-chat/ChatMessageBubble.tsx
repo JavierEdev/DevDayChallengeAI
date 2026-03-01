@@ -1,9 +1,10 @@
-import type { ChatMessageBubbleProps } from "./interfaces/ChatmessageBubbleProps";
+import { FOOTER_CHAT_TEXT } from "./data/footerChatText";
+import type { ChatMessageBubbleProps } from "./interfaces/ChatMessageBubbleProps";
 
 function formatTime(timestamp: string): string {
   const date = new Date(timestamp);
   if (Number.isNaN(date.getTime())) {
-    return "--:--";
+    return FOOTER_CHAT_TEXT.invalidTime;
   }
 
   return date.toLocaleTimeString([], {

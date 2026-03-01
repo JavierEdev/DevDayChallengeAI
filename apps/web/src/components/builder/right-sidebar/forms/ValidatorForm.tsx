@@ -1,42 +1,9 @@
 import { useEffect, useState } from "react";
 
 import type { ValidatorNodeData } from "@shared/contracts/flow/types";
-
-interface ValidatorFormProps {
-  data: ValidatorNodeData;
-  onChange: (patch: Partial<ValidatorNodeData>) => void;
-}
-
-interface ValidatorPreset {
-  key: string;
-  label: string;
-  fields: string[];
-  instructions: string;
-}
-
-const VALIDATOR_PRESETS: ValidatorPreset[] = [
-  {
-    key: "faq",
-    label: "Consultas Generales",
-    fields: ["tipoCliente", "situacionLaboral", "edadAproximada"],
-    instructions:
-      "Recopila perfil base del cliente antes de responder preguntas generales del negocio."
-  },
-  {
-    key: "catalogo",
-    label: "Catalogo Vehiculos",
-    fields: ["presupuesto", "condicionVehiculo", "descuentoEmpleado", "tipoVehiculo"],
-    instructions:
-      "Valida datos del cliente para recomendar vehiculos segun perfil y presupuesto."
-  },
-  {
-    key: "agenda",
-    label: "Agendamiento Cita",
-    fields: ["nombreCompleto", "fechaPreferida", "horaPreferida", "motivoCita", "vehiculoInteres"],
-    instructions:
-      "Solicita datos completos para confirmar cita de prueba de manejo o asesoria."
-  }
-];
+import { VALIDATOR_PRESETS } from "../data/ValidatorPresetsData";
+import type { ValidatorFormProps } from "../interfaces/ValidatorFormProps";
+import type { ValidatorPreset } from "../interfaces/ValidatorPreset";
 
 function optionalText(value: string): string | undefined {
   const next = value.trim();
@@ -54,7 +21,7 @@ function parseRequiredFields(rawValue: string): string[] {
     .filter(Boolean);
 }
 
-export function ValidatorForm({ data, onChange }: ValidatorFormProps) {
+export function ValidatorForm({ data, onChange }: Readonly<ValidatorFormProps>) {
   const [requiredFieldsDraft, setRequiredFieldsDraft] = useState(
     stringifyRequiredFields(data.requiredFields)
   );

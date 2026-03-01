@@ -1,9 +1,4 @@
-import type { AgentNodeData } from "@shared/contracts/flow/types";
-
-interface SpecialistFormProps {
-  data: AgentNodeData;
-  onChange: (patch: Partial<AgentNodeData>) => void;
-}
+import type { SpecialistFormProps } from "../interfaces/SpecialistFormProps";
 
 function optionalText(value: string): string | undefined {
   const next = value.trim();
@@ -19,7 +14,7 @@ function parseOptionalNumber(value: string): number | undefined {
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
-export function SpecialistForm({ data, onChange }: SpecialistFormProps) {
+export function SpecialistForm({ data, onChange }: Readonly<SpecialistFormProps>) {
   return (
     <div className="inspector-form">
       <div className="inspector-field">

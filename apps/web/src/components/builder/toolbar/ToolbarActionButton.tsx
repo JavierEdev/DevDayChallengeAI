@@ -1,4 +1,4 @@
-import type { ToolbarActionButtonProps } from "./interfaces/ToolBarActionProps";
+import type { ToolbarActionButtonProps } from "./interfaces/ToolbarActionButtonProps";
 
 export function ToolbarActionButton({
   label,

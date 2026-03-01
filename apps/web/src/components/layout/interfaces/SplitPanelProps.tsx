@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 
 interface SplitPaneProps {
-  left: ReactNode;
+  left?: ReactNode;
   center: ReactNode;
-  right: ReactNode;
+  right?: ReactNode;
   leftWidth?: number;
   rightWidth?: number;
 }

@@ -1,5 +1,17 @@
+import {
+  FolderOpen,
+  MessageSquare,
+  PanelLeft,
+  PanelRight,
+  RotateCcw,
+  Save,
+  ShieldCheck
+} from "lucide-react";
+
 import { useFlowStore } from "@/state/flow.store";
 import { useUiStore } from "@/state/ui.store";
+
+import { ToolbarActionButton } from "./ToolbarActionButton";
 
 export function BuilderToolbar() {
   const flowId = useFlowStore((state) => state.flowId);
@@ -69,27 +81,48 @@ export function BuilderToolbar() {
       </div>
 
       <div className="toolbar__group">
-        <button type="button" className="is-muted" onClick={resetFlow}>
-          Reset
-        </button>
-        <button type="button" onClick={handleLoad} disabled={isLoading}>
-          {isLoading ? "Cargando..." : "Cargar"}
-        </button>
-        <button type="button" onClick={handleValidate} disabled={isValidating}>
-          {isValidating ? "Validando..." : "Validar"}
-        </button>
-        <button type="button" onClick={handleSave} disabled={isSaving}>
-          {isSaving ? "Guardando..." : "Guardar"}
-        </button>
-        <button type="button" className="is-muted" onClick={toggleLeftSidebar}>
-          Palette
-        </button>
-        <button type="button" className="is-muted" onClick={toggleRightSidebar}>
-          Inspector
-        </button>
-        <button type="button" className="is-muted" onClick={toggleChat}>
-          Chat
-        </button>
+        <ToolbarActionButton
+          label="Reset"
+          icon={<RotateCcw size={14} />}
+          onClick={resetFlow}
+          className="is-muted"
+        />
+        <ToolbarActionButton
+          label={isLoading ? "Cargando..." : "Cargar"}
+          icon={<FolderOpen size={14} />}
+          onClick={handleLoad}
+          disabled={isLoading}
+        />
+        <ToolbarActionButton
+          label={isValidating ? "Validando..." : "Validar"}
+          icon={<ShieldCheck size={14} />}
+          onClick={handleValidate}
+          disabled={isValidating}
+        />
+        <ToolbarActionButton
+          label={isSaving ? "Guardando..." : "Guardar"}
+          icon={<Save size={14} />}
+          onClick={handleSave}
+          disabled={isSaving}
+        />
+        <ToolbarActionButton
+          label="Palette"
+          icon={<PanelLeft size={14} />}
+          onClick={toggleLeftSidebar}
+          className="is-muted"
+        />
+        <ToolbarActionButton
+          label="Inspector"
+          icon={<PanelRight size={14} />}
+          onClick={toggleRightSidebar}
+          className="is-muted"
+        />
+        <ToolbarActionButton
+          label="Chat"
+          icon={<MessageSquare size={14} />}
+          onClick={toggleChat}
+          className="is-muted"
+        />
       </div>
     </section>
   );

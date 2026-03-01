@@ -15,38 +15,10 @@ export function BuilderPage() {
   return (
     <BuilderLayout
       toolbar={<BuilderToolbar />}
-      leftSidebar={
-        leftSidebarOpen ? (
-          <AgentPalette />
-        ) : (
-          <section className="panel">
-            <div className="panel__body">
-              <p className="muted">Palette oculta.</p>
-            </div>
-          </section>
-        )
-      }
+      leftSidebar={leftSidebarOpen ? <AgentPalette /> : null}
       canvas={<FlowCanvas />}
-      rightSidebar={
-        rightSidebarOpen ? (
-          <InspectorPanel />
-        ) : (
-          <section className="panel">
-            <div className="panel__body">
-              <p className="muted">Inspector oculto.</p>
-            </div>
-          </section>
-        )
-      }
-      footer={
-        chatOpen ? (
-          <ChatDock />
-        ) : (
-          <section className="chat-dock">
-            <p className="muted">Chat oculto.</p>
-          </section>
-        )
-      }
+      rightSidebar={rightSidebarOpen ? <InspectorPanel /> : null}
+      footer={chatOpen ? <ChatDock /> : null}
     />
   );
 }

@@ -108,7 +108,7 @@ async function bootstrap(): Promise<void> {
   if (!Number.isInteger(port) || port <= 0 || port > 65535) {
     throw new Error(`Invalid PORT value: ${process.env.PORT ?? "(undefined)"}`);
   }
-  await httpServer.listen({ port, host: "127.0.0.1" });
+  await httpServer.listen({ port, host: "0.0.0.0" });
 
   if (telegramChannelConfig?.transport === "polling" && handleTelegramMessageUseCase) {
     const pollingTimeoutSeconds = parseOptionalPositiveInteger(

@@ -33,7 +33,7 @@ const API_TIMEOUT_MS =
     : DEFAULT_API_TIMEOUT_MS;
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:3037",
+  baseURL: import.meta.env.VITE_API_BASE_URL ?? "http://0.0.0.0:3037",
   timeout: API_TIMEOUT_MS
 });
 

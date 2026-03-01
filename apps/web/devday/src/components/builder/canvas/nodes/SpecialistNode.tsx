@@ -1,0 +1,19 @@
+import type { NodeProps } from "reactflow";
+
+import type { AgentNodeData } from "@shared/contracts/flow/types";
+
+import type { BuilderNodeData } from "@/lib/reactflow/rf.types";
+
+export function SpecialistNode({ data, selected }: NodeProps<BuilderNodeData>) {
+  const config = data.config as AgentNodeData;
+  const title = config.title?.trim() || "Specialist";
+  const summary = config.model?.trim() || "Modelo por defecto";
+
+  return (
+    <div className={`node-card node-card--specialist ${selected ? "is-selected" : ""}`}>
+      <p className="node-card__eyebrow">agent</p>
+      <p className="node-card__title">{title}</p>
+      <p className="node-card__meta">{summary}</p>
+    </div>
+  );
+}

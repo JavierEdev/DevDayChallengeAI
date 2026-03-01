@@ -1,3 +1,5 @@
+import type { ValidationRule } from "@devday/shared";
+
 export class RunConversationTurnHelper {
   static formatUnknownError(error: unknown): string {
     if (error instanceof Error) {
@@ -87,6 +89,15 @@ export class RunConversationTurnHelper {
     }
 
     current[leafKey] = value;
+  }
+
+  static buildValidatorFailMessage(failedRules: ValidationRule[]): string {
+    if (failedRules.length === 0) {
+      return "Necesito informacion adicional para continuar.";
+    }
+
+    const fields = failedRules.map((rule) => rule.errorMessage ?? `- ${rule.field}`);
+    return `Antes de continuar necesito estos datos:\n${fields.join("\n")}`;
   }
 
   private static safeParseObject(value: string): Record<string, unknown> | null {

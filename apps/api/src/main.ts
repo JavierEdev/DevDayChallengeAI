@@ -40,6 +40,11 @@ async function bootstrap(): Promise<void> {
   const updateFlowUseCase = new UpdateFlowUseCase(flowRepository);
   const deleteFlowUseCase = new DeleteFlowUseCase(flowRepository);
   const createSessionUseCase = new CreateSessionUseCase(sessionStateStore, flowRepository);
+  const configuredUseAgentLlm = parseOptionalBoolean(process.env.USE_AGENT_LLM, "USE_AGENT_LLM");
+  const configuredUseValidatorLlm = parseOptionalBoolean(
+    process.env.USE_VALIDATOR_LLM,
+    "USE_VALIDATOR_LLM"
+  );
   const runConversationTurnUseCase = new RunConversationTurnUseCase(
     sessionStateStore,
     flowRepository,
@@ -52,7 +57,11 @@ async function bootstrap(): Promise<void> {
           "AGENT_TIMEOUT_MS"
         );
         return agentTimeoutMs !== undefined ? { agentTimeoutMs } : {};
-      })()
+      })(),
+      ...(configuredUseAgentLlm !== undefined ? { useAgentLlm: configuredUseAgentLlm } : {}),
+      ...(configuredUseValidatorLlm !== undefined
+        ? { useValidatorLlm: configuredUseValidatorLlm }
+        : {})
     }
   );
   const validateFlowUseCase = new ValidateFlowUseCase();
@@ -142,4 +151,23 @@ function parseOptionalPositiveInteger(
   }
 
   return parsed;
+}
+
+function parseOptionalBoolean(
+  value: string | undefined,
+  variableName: string
+): boolean | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "true" || normalized === "1" || normalized === "yes") {
+    return true;
+  }
+  if (normalized === "false" || normalized === "0" || normalized === "no") {
+    return false;
+  }
+
+  throw new Error(`Invalid boolean for ${variableName}: ${value}`);
 }

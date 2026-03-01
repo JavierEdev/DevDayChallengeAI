@@ -9,7 +9,7 @@ import { NodeCard } from "./components/NodeCard";
 export function SpecialistNode({ data, selected }: NodeProps<BuilderNodeData>) {
   const config = data.config as AgentNodeData;
   const title = config.title?.trim() || "Specialist";
-  const summary = config.model?.trim() || "Modelo por defecto";
+  const summary = config.model?.trim() || "gemini-3-flash";
 
   return (
     <NodeCard variant="specialist" selected={selected} eyebrow="agent" title={title} summary={summary} />

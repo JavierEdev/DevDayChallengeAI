@@ -42,6 +42,7 @@ export function SpecialistForm({ data, onChange }: SpecialistFormProps) {
           id="specialist-model"
           className="inspector-input"
           value={data.model ?? ""}
+          placeholder="gemini-3-flash"
           onChange={(event) => onChange({ model: optionalText(event.target.value) })}
         />
       </div>

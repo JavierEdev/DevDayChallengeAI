@@ -1,23 +1,17 @@
 import { randomUUID } from "node:crypto";
 
 import type {
-  AgentNodeData,
-  FlowDefinition,
-  FlowNode,
   SendMessageRequest,
   SendMessageResponse,
   SessionMessage,
   SessionState,
   ToolNodeData,
-  TraceEvent,
-  ValidationOperator,
-  ValidationRule,
-  ValidatorNodeData
+  TraceEvent
 } from "@devday/shared";
 
 import type {
   IAgentLlmInvocation,
-  IAgentLlmMessage,
+  IAgentLlmResult,
   IAgentLlmPort
 } from "../../domain/agent/IAgentLlmPort.js";
 import type { IFlowRepository } from "../../domain/flow/IFlowRepository.js";
@@ -27,43 +21,42 @@ import type { IToolRepository } from "../../domain/tool/IToolRepository.js";
 import type { IToolSemanticMatch } from "../../domain/tool/IToolRepository.js";
 import { FlowNotFoundError } from "../errors/FlowNotFoundError.js";
 import { SessionNotFoundError } from "../errors/SessionNotFoundError.js";
+import { RunConversationTurnAgentComposer } from "./RunConversationTurnAgentComposer.js";
+import { RunConversationTurnAgentResponseResolver } from "./RunConversationTurnAgentResponseResolver.js";
+import { RunConversationTurnFlowNavigator } from "./RunConversationTurnFlowNavigator.js";
 import { RunConversationTurnHelper } from "./RunConversationTurnHelper.js";
+import { RunConversationTurnValidatorEngine } from "./RunConversationTurnValidatorEngine.js";
 
-const MAX_TOOL_CONTEXT_RECORDS = 5;
-const MAX_TOOL_OUTPUT_RECORDS = 20;
-const MAX_TOOL_CONTEXT_CONTENT_CHARS = 360;
-const MAX_MESSAGE_HISTORY = 12;
+const MAX_TOOL_CONTEXT_RECORDS = 2;
+const MAX_TOOL_OUTPUT_RECORDS = 12;
+const MAX_TOOL_CONTEXT_CONTENT_CHARS = 160;
+const MAX_MESSAGE_HISTORY = 6;
 const MAX_TURN_NODE_STEPS = 24;
-const MAX_VALIDATOR_EXTRACTION_FIELDS = 12;
-const DEFAULT_TOOL_SEMANTIC_TIMEOUT_MS = 3_000;
-const DEFAULT_VALIDATOR_LLM_EXTRACTION_TIMEOUT_MS = 4_000;
-const DEFAULT_AGENT_TIMEOUT_MS = 60_000;
-const DEFAULT_AGENT_MAX_TOKENS = 320;
+const DEFAULT_TOOL_SEMANTIC_TIMEOUT_MS = 1_200;
+const DEFAULT_AGENT_TIMEOUT_MS = 20_000;
+const DEFAULT_AGENT_MAX_TOKENS = 140;
+const DIRECT_TOOL_RESULT_LIMIT = 3;
 const LAST_AGENT_RESPONSE_VARIABLE = "lastAgentResponse";
-const LEGACY_AGENT_MODEL = "gemini-2.0-flash";
-const FALLBACK_AGENT_MODEL = "gemini-2.5-flash";
-
-interface INextNodeSelection {
-  nextNodeId: string | null;
-  edgeId?: string | undefined;
-}
-
-interface IRouterSelection extends INextNodeSelection {
-  routeId?: string | undefined;
-  reason?: string | undefined;
-}
-
-interface IValidatorEvaluation {
-  passed: boolean;
-  failedRules: ValidationRule[];
-}
+const PREFERRED_AGENT_MODEL = "gemini-3-flash";
+const RESILIENT_FALLBACK_AGENT_MODEL = "gemini-2.5-flash";
+const SPECIALIST_CONTEXT_DATASETS = ["faqs", "catalogo", "agenda"] as const;
+const LEGACY_AGENT_MODELS = new Set([
+  "gemini-2.0-flash",
+  "gemini-2.5-flash"
+]);
 
 export interface IRunConversationTurnUseCaseOptions {
   agentTimeoutMs?: number;
+  useAgentLlm?: boolean;
+  useValidatorLlm?: boolean;
 }
 
 export class RunConversationTurnUseCase {
   private readonly agentTimeoutMs: number;
+  private readonly useAgentLlm: boolean;
+  private readonly validatorEngine: RunConversationTurnValidatorEngine;
+  private readonly agentComposer: RunConversationTurnAgentComposer;
+  private readonly agentResponseResolver: RunConversationTurnAgentResponseResolver;
 
   constructor(
     private readonly sessionStateStore: ISessionStateStore,
@@ -73,6 +66,24 @@ export class RunConversationTurnUseCase {
     options: IRunConversationTurnUseCaseOptions = {}
   ) {
     this.agentTimeoutMs = resolvePositiveTimeout(options.agentTimeoutMs, DEFAULT_AGENT_TIMEOUT_MS);
+    this.useAgentLlm = options.useAgentLlm ?? true;
+    this.validatorEngine = new RunConversationTurnValidatorEngine(
+      this.agentLlmPort,
+      this.withTimeout.bind(this),
+      options.useValidatorLlm ?? true
+    );
+    this.agentComposer = new RunConversationTurnAgentComposer({
+      maxToolContextRecords: MAX_TOOL_CONTEXT_RECORDS,
+      maxToolContextContentChars: MAX_TOOL_CONTEXT_CONTENT_CHARS,
+      maxMessageHistory: MAX_MESSAGE_HISTORY,
+      directToolResultLimit: DIRECT_TOOL_RESULT_LIMIT,
+      lastAgentResponseVariable: LAST_AGENT_RESPONSE_VARIABLE
+    });
+    this.agentResponseResolver = new RunConversationTurnAgentResponseResolver(
+      this.useAgentLlm,
+      this.agentComposer,
+      this.invokeAgentNodeLlm.bind(this)
+    );
   }
 
   async execute(input: SendMessageRequest): Promise<SendMessageResponse> {
@@ -85,7 +96,7 @@ export class RunConversationTurnUseCase {
       throw new FlowNotFoundError(sessionState.flowId);
     }
 
-    const nodeMap = this.buildNodeMap(flowDefinition);
+    const nodeMap = RunConversationTurnFlowNavigator.buildNodeMap(flowDefinition);
     const runtimeToolDatasets: IToolDataset[] = [];
 
     const traceEvents: TraceEvent[] = [];
@@ -113,7 +124,11 @@ export class RunConversationTurnUseCase {
       message: "Mensaje del usuario procesado"
     }));
 
-    let currentNodeId = this.resolveStartingNodeId(sessionState, flowDefinition, nodeMap);
+    let currentNodeId = RunConversationTurnFlowNavigator.resolveStartingNodeId(
+      sessionState,
+      flowDefinition,
+      nodeMap
+    );
     let nodeSteps = 0;
 
     while (nodeSteps < MAX_TURN_NODE_STEPS) {
@@ -137,7 +152,7 @@ export class RunConversationTurnUseCase {
       );
 
       if (node.type === "start") {
-        const next = this.selectNextNode(flowDefinition, node.id);
+        const next = RunConversationTurnFlowNavigator.selectNextNode(flowDefinition, node.id);
         if (!next.nextNodeId) {
           return this.failTurn(
             sessionState,
@@ -178,7 +193,7 @@ export class RunConversationTurnUseCase {
           );
         }
 
-        const next = this.selectNextNode(flowDefinition, node.id);
+        const next = RunConversationTurnFlowNavigator.selectNextNode(flowDefinition, node.id);
         if (!next.nextNodeId) {
           return this.failTurn(
             sessionState,
@@ -193,7 +208,11 @@ export class RunConversationTurnUseCase {
       }
 
       if (node.type === "router") {
-        const routeSelection = this.selectRouterTarget(flowDefinition, node, input.message);
+        const routeSelection = RunConversationTurnFlowNavigator.selectRouterTarget(
+          flowDefinition,
+          node,
+          input.message
+        );
         if (!routeSelection.nextNodeId) {
           return this.failTurn(
             sessionState,
@@ -225,8 +244,8 @@ export class RunConversationTurnUseCase {
       }
 
       if (node.type === "validator") {
-        const runtimeRules = this.resolveValidatorRules(node.data);
-        const extractedFields = await this.hydrateValidatorVariablesFromText(
+        const runtimeRules = this.validatorEngine.resolveRules(node.data);
+        const extractedFields = await this.validatorEngine.hydrateVariablesFromText(
           sessionState,
           input.message,
           runtimeRules
@@ -241,12 +260,16 @@ export class RunConversationTurnUseCase {
           );
         }
 
-        const evaluation = this.evaluateValidatorNode(node.data, sessionState.variables);
+        const evaluation = this.validatorEngine.evaluate(node.data, sessionState.variables);
         if (evaluation.passed) {
           const preferredNextNodeId = node.data.onCompleteTargetNodeId;
           const next = preferredNextNodeId
-            ? this.selectSpecificNextNode(flowDefinition, node.id, preferredNextNodeId)
-            : this.selectNextNode(flowDefinition, node.id);
+            ? RunConversationTurnFlowNavigator.selectSpecificNextNode(
+                flowDefinition,
+                node.id,
+                preferredNextNodeId
+              )
+            : RunConversationTurnFlowNavigator.selectNextNode(flowDefinition, node.id);
           if (!next.nextNodeId) {
             return this.failTurn(
               sessionState,
@@ -283,9 +306,11 @@ export class RunConversationTurnUseCase {
           continue;
         }
 
-        const assistantMessage = this.createAssistantMessage(
-          this.buildValidatorFailMessage(evaluation.failedRules)
+        const missingFieldsMessage = await this.validatorEngine.buildMissingFieldsMessage(
+          evaluation.failedRules,
+          input.message
         );
+        const assistantMessage = this.createAssistantMessage(missingFieldsMessage);
         sessionState.messages.push(assistantMessage);
         sessionState.status = "waiting_input";
         sessionState.updatedAt = assistantMessage.createdAt;
@@ -380,8 +405,13 @@ export class RunConversationTurnUseCase {
             continue;
           }
 
-          loadedDatasets.push(dataset);
-          runtimeToolDatasets.push(dataset);
+          const compactFallbackDataset: IToolDataset = {
+            name: dataset.name,
+            description: dataset.description,
+            records: dataset.records.slice(0, MAX_TOOL_OUTPUT_RECORDS)
+          };
+          loadedDatasets.push(compactFallbackDataset);
+          runtimeToolDatasets.push(compactFallbackDataset);
 
           traceEvents.push(
             this.createTraceEvent(sessionState.id, "tool_called", this.nowIso(), {
@@ -389,7 +419,8 @@ export class RunConversationTurnUseCase {
               message: `Tool dataset "${dataset.name}" cargado`,
               payload: {
                 dataset: dataset.name,
-                records: dataset.records.length,
+                records: compactFallbackDataset.records.length,
+                totalRecords: dataset.records.length,
                 semantic: false,
                 reason: "fallback_no_semantic_matches_or_disabled"
               }
@@ -404,7 +435,7 @@ export class RunConversationTurnUseCase {
           sessionState.variables[node.data.outputVariable] = outputRecords;
         }
 
-        const next = this.selectNextNode(flowDefinition, node.id);
+        const next = RunConversationTurnFlowNavigator.selectNextNode(flowDefinition, node.id);
         if (!next.nextNodeId) {
           return this.failTurn(
             sessionState,
@@ -427,28 +458,22 @@ export class RunConversationTurnUseCase {
       }
 
       if (node.type === "agent") {
-        const llmMessages = this.buildLlmMessages(sessionState, flowDefinition, node.data, runtimeToolDatasets);
+        const agentRole = this.resolveAgentRole(node.data.label);
+        const agentRuntimeDatasets = await this.resolveAgentRuntimeDatasets(
+          agentRole,
+          input.message,
+          runtimeToolDatasets
+        );
 
         try {
-          const llmInvocation: IAgentLlmInvocation = {
-            messages: llmMessages
-          };
-          if (node.data.model) {
-            llmInvocation.model =
-              node.data.model.trim().toLowerCase() === LEGACY_AGENT_MODEL
-                ? FALLBACK_AGENT_MODEL
-                : node.data.model;
-          }
-          if (node.data.temperature !== undefined) {
-            llmInvocation.temperature = node.data.temperature;
-          }
-          llmInvocation.maxTokens = DEFAULT_AGENT_MAX_TOKENS;
-
-          const llmResult = await this.withTimeout(
-            this.agentLlmPort.invoke(llmInvocation),
-            this.agentTimeoutMs,
-            `La respuesta del agente excedio ${this.agentTimeoutMs}ms`
-          );
+          const llmResult = await this.agentResponseResolver.resolve({
+            userMessage: input.message,
+            flowDefinition,
+            sessionState,
+            agentNodeData: node.data,
+            agentRole,
+            agentRuntimeDatasets
+          });
 
           sessionState.variables[LAST_AGENT_RESPONSE_VARIABLE] = llmResult.text;
           sessionState.variables[`agentResponse:${node.id}`] = llmResult.text;
@@ -463,7 +488,7 @@ export class RunConversationTurnUseCase {
             })
           );
 
-          const next = this.selectNextNode(flowDefinition, node.id);
+          const next = RunConversationTurnFlowNavigator.selectNextNode(flowDefinition, node.id);
           if (!next.nextNodeId) {
             const assistantMessage = this.createAssistantMessage(llmResult.text, {
               nodeId: node.id,
@@ -516,7 +541,10 @@ export class RunConversationTurnUseCase {
       }
 
       if (node.type === "response") {
-        const responseText = this.buildResponseText(node.data.messageTemplate, sessionState.variables);
+        const responseText = this.agentComposer.buildResponseText(
+          node.data.messageTemplate,
+          sessionState.variables
+        );
         const assistantMessage = this.createAssistantMessage(responseText, {
           nodeId: node.id
         });
@@ -530,7 +558,7 @@ export class RunConversationTurnUseCase {
         if (node.data.endSession) {
           delete sessionState.execution.nextNodeId;
         } else {
-          const nextAfterResponse = this.selectNextNode(flowDefinition, node.id);
+          const nextAfterResponse = RunConversationTurnFlowNavigator.selectNextNode(flowDefinition, node.id);
           sessionState.execution.nextNodeId = nextAfterResponse.nextNodeId ?? flowDefinition.startNodeId;
         }
 
@@ -569,490 +597,6 @@ export class RunConversationTurnUseCase {
       traceEvents,
       `Se alcanzo el maximo de ${MAX_TURN_NODE_STEPS} pasos en un turno.`
     );
-  }
-
-  private buildLlmMessages(
-    sessionState: SessionState,
-    flowDefinition: FlowDefinition,
-    agentNodeData: AgentNodeData,
-    runtimeToolDatasets: IToolDataset[]
-  ): IAgentLlmMessage[] {
-    const messages: IAgentLlmMessage[] = [];
-    const toolContext = this.buildToolContext(runtimeToolDatasets);
-
-    messages.push({
-      role: "system",
-      content: this.buildSystemPrompt(flowDefinition, agentNodeData, toolContext)
-    });
-
-    const recentMessages = sessionState.messages.slice(-MAX_MESSAGE_HISTORY);
-    for (const message of recentMessages) {
-      messages.push({
-        role: message.role,
-        content: message.content
-      });
-    }
-
-    return messages;
-  }
-
-  private buildSystemPrompt(
-    flowDefinition: FlowDefinition,
-    agentNodeData: AgentNodeData,
-    toolContext: string
-  ): string {
-    const basePrompt = [
-      "Eres un asistente de una concesionaria de autos.",
-      "Responde siempre en espanol neutro, de forma clara y breve.",
-      "Usa solo la informacion disponible en el contexto y en el historial de mensajes.",
-      "Si falta informacion, haz una pregunta de seguimiento concreta.",
-      `Flujo actual: ${flowDefinition.name}.`
-    ].join(" ");
-
-    const promptSections: string[] = [basePrompt];
-    promptSections.push(`Instrucciones del agente: ${agentNodeData.instructions}`);
-    if (toolContext) {
-      promptSections.push(`Contexto de negocio:\n${toolContext}`);
-    }
-
-    return promptSections.join("\n\n");
-  }
-
-  private buildToolContext(datasets: IToolDataset[]): string {
-    const lines: string[] = [];
-    for (const dataset of datasets) {
-      lines.push(`[${dataset.name}] ${dataset.description}`);
-      for (const record of dataset.records.slice(0, MAX_TOOL_CONTEXT_RECORDS)) {
-        lines.push(`- ${record.title}: ${this.clampText(record.content, MAX_TOOL_CONTEXT_CONTENT_CHARS)}`);
-      }
-    }
-
-    return lines.join("\n");
-  }
-
-  private resolveStartingNodeId(
-    sessionState: SessionState,
-    flowDefinition: FlowDefinition,
-    nodeMap: Map<string, FlowNode>
-  ): string {
-    if (sessionState.execution.nextNodeId && nodeMap.has(sessionState.execution.nextNodeId)) {
-      return sessionState.execution.nextNodeId;
-    }
-    return flowDefinition.startNodeId;
-  }
-
-  private buildNodeMap(flowDefinition: FlowDefinition): Map<string, FlowNode> {
-    return new Map(flowDefinition.nodes.map((node) => [node.id, node]));
-  }
-
-  private selectNextNode(flowDefinition: FlowDefinition, sourceNodeId: string): INextNodeSelection {
-    const outgoingEdges = flowDefinition.edges.filter((edge) => edge.source === sourceNodeId);
-    const preferredEdge =
-      outgoingEdges.find((edge) => edge.kind === "default") ?? outgoingEdges[0];
-    if (!preferredEdge) {
-      return { nextNodeId: null };
-    }
-
-    return {
-      nextNodeId: preferredEdge.target,
-      edgeId: preferredEdge.id
-    };
-  }
-
-  private selectSpecificNextNode(
-    flowDefinition: FlowDefinition,
-    sourceNodeId: string,
-    targetNodeId: string
-  ): INextNodeSelection {
-    const selectedEdge = flowDefinition.edges.find(
-      (edge) => edge.source === sourceNodeId && edge.target === targetNodeId
-    );
-    if (!selectedEdge) {
-      return { nextNodeId: null };
-    }
-
-    return {
-      nextNodeId: selectedEdge.target,
-      edgeId: selectedEdge.id
-    };
-  }
-
-  private selectRouterTarget(
-    flowDefinition: FlowDefinition,
-    node: Extract<FlowNode, { type: "router" }>,
-    userMessage: string
-  ): IRouterSelection {
-    const outgoingEdges = flowDefinition.edges.filter((edge) => edge.source === node.id);
-    const normalizedMessage = userMessage.toLowerCase();
-
-    for (const route of node.data.routes) {
-      if (!this.matchesRoute(route.matchValue ?? route.key, normalizedMessage)) {
-        continue;
-      }
-
-      const linkedEdge = outgoingEdges.find((edge) => edge.target === route.targetNodeId);
-      return {
-        nextNodeId: route.targetNodeId,
-        edgeId: linkedEdge?.id,
-        routeId: route.id ?? route.key,
-        reason: `Router selecciono la ruta "${route.label}"`
-      };
-    }
-
-    if (node.data.fallbackNodeId) {
-      const fallbackEdge = outgoingEdges.find((edge) => edge.target === node.data.fallbackNodeId);
-      return {
-        nextNodeId: node.data.fallbackNodeId,
-        edgeId: fallbackEdge?.id,
-        reason: "Router uso fallbackNodeId"
-      };
-    }
-
-    const fallbackEdge = outgoingEdges.find((edge) => edge.kind === "fallback");
-    if (fallbackEdge) {
-      return {
-        nextNodeId: fallbackEdge.target,
-        edgeId: fallbackEdge.id,
-        reason: "Router uso edge fallback"
-      };
-    }
-
-    const defaultEdge = outgoingEdges[0];
-    if (defaultEdge) {
-      return {
-        nextNodeId: defaultEdge.target,
-        edgeId: defaultEdge.id,
-        reason: "Router uso la primera salida disponible"
-      };
-    }
-
-    return { nextNodeId: null };
-  }
-
-  private matchesRoute(matchValue: string | undefined, normalizedMessage: string): boolean {
-    if (!matchValue) {
-      return false;
-    }
-
-    const isRegexPattern = matchValue.startsWith("/") && matchValue.endsWith("/") && matchValue.length > 2;
-    if (isRegexPattern) {
-      try {
-        const expression = new RegExp(matchValue.slice(1, -1), "i");
-        return expression.test(normalizedMessage);
-      } catch {
-        return false;
-      }
-    }
-
-    const tokens = matchValue
-      .toLowerCase()
-      .split(/[|,]/)
-      .map((token) => token.trim())
-      .filter(Boolean);
-
-    return tokens.some((token) => normalizedMessage.includes(token));
-  }
-
-  private evaluateValidatorNode(
-    validatorNodeData: ValidatorNodeData,
-    variables: Record<string, unknown>
-  ): IValidatorEvaluation {
-    const runtimeRules = this.resolveValidatorRules(validatorNodeData);
-    const failedRules = runtimeRules.filter((rule) => !this.passesRule(rule, variables));
-    const mode = validatorNodeData.mode ?? "all";
-
-    if (mode === "any") {
-      return {
-        passed: failedRules.length < runtimeRules.length,
-        failedRules
-      };
-    }
-
-    return {
-      passed: failedRules.length === 0,
-      failedRules
-    };
-  }
-
-  private resolveValidatorRules(validatorNodeData: ValidatorNodeData): ValidationRule[] {
-    if (validatorNodeData.rules && validatorNodeData.rules.length > 0) {
-      return validatorNodeData.rules;
-    }
-
-    const requiredFields = validatorNodeData.requiredFields ?? [];
-    return requiredFields.map((field) => ({
-      id: `required-${field}`,
-      field,
-      operator: "exists" as ValidationOperator,
-      errorMessage: `Falta el campo requerido: ${field}`
-    }));
-  }
-
-  private async hydrateValidatorVariablesFromText(
-    sessionState: SessionState,
-    userMessage: string,
-    runtimeRules: ValidationRule[]
-  ): Promise<string[]> {
-    const candidateFields = Array.from(
-      new Set(
-        runtimeRules
-          .filter((rule) => !this.passesRule(rule, sessionState.variables))
-          .map((rule) => rule.field)
-      )
-    ).slice(0, MAX_VALIDATOR_EXTRACTION_FIELDS);
-
-    if (candidateFields.length === 0) {
-      return [];
-    }
-
-    const extractedFields = new Set<string>();
-    for (const field of candidateFields) {
-      const extractedValue = this.extractFieldValueByHeuristics(field, userMessage);
-      if (extractedValue === undefined || extractedValue === null) {
-        continue;
-      }
-
-      RunConversationTurnHelper.writeVariable(sessionState.variables, field, extractedValue);
-      extractedFields.add(field);
-    }
-
-    const remainingFields = candidateFields.filter((field) => !extractedFields.has(field));
-    if (remainingFields.length === 0) {
-      return Array.from(extractedFields);
-    }
-
-    try {
-      const llmExtractedValues = await this.withTimeout(
-        this.extractFieldsWithLlm(userMessage, remainingFields),
-        DEFAULT_VALIDATOR_LLM_EXTRACTION_TIMEOUT_MS,
-        `La extraccion del validator excedio ${DEFAULT_VALIDATOR_LLM_EXTRACTION_TIMEOUT_MS}ms`
-      );
-      for (const [field, value] of Object.entries(llmExtractedValues)) {
-        if (value === undefined || value === null) {
-          continue;
-        }
-
-        const normalizedValue = typeof value === "string" ? value.trim() : String(value);
-        if (!normalizedValue) {
-          continue;
-        }
-
-        RunConversationTurnHelper.writeVariable(sessionState.variables, field, normalizedValue);
-        extractedFields.add(field);
-      }
-    } catch {
-      // Si el extractor por LLM falla, se mantiene la validacion normal sin romper el flujo.
-    }
-
-    return Array.from(extractedFields);
-  }
-
-  private extractFieldValueByHeuristics(fieldPath: string, userMessage: string): string | undefined {
-    const normalizedFieldName = RunConversationTurnHelper.normalizeFieldName(fieldPath);
-
-    if (normalizedFieldName.includes("nombre")) {
-      const match = userMessage.match(/(?:mi nombre es|soy)\s+([A-Za-zÁÉÍÓÚÑáéíóúñ]+(?:\s+[A-Za-zÁÉÍÓÚÑáéíóúñ]+){0,4})/i);
-      return match?.[1]?.trim();
-    }
-
-    if (normalizedFieldName.includes("presupuesto")) {
-      const explicitBudgetMatch = userMessage.match(
-        /(?:presupuesto(?:\s+de|\s+es)?|tengo(?:\s+un)?\s+presupuesto(?:\s+de)?)[^\d$QqGgTtUuSsDd]*((?:GTQ|GT|Q|USD|\$)?\s*\d[\d.,]*)/i
-      );
-      if (explicitBudgetMatch?.[1]) {
-        return explicitBudgetMatch[1].trim();
-      }
-
-      const conversationalBudgetMatch = userMessage.match(
-        /\b(?:tengo|cuento\s+con|manejo|dispongo\s+de)\s+((?:GTQ|GT|Q|USD|\$)\s*\d[\d.,]*)\b/i
-      );
-      if (conversationalBudgetMatch?.[1]) {
-        return conversationalBudgetMatch[1].trim();
-      }
-
-      const currencyAmountMatch = userMessage.match(/\b((?:GTQ|GT|Q|USD|\$)\s*\d[\d.,]*)\b/i);
-      return currencyAmountMatch?.[1]?.trim();
-    }
-
-    if (
-      normalizedFieldName.includes("descuentoempleado") ||
-      (normalizedFieldName.includes("descuento") && normalizedFieldName.includes("empleado"))
-    ) {
-      if (
-        /\b(?:no\s+tengo|sin|ningun|ningún|no\s+cuento\s+con)\s+(?:descuento(?:\s+de)?\s+empleado|descuentoempleado)\b/i.test(
-          userMessage
-        ) ||
-        /\bno\s+soy\s+empleado\b/i.test(userMessage)
-      ) {
-        return "no";
-      }
-
-      if (
-        /\b(?:si|sí)\s+(?:tengo|cuento\s+con)\s+(?:descuento(?:\s+de)?\s+empleado|descuentoempleado)\b/i.test(
-          userMessage
-        ) ||
-        /\btengo\s+descuento(?:\s+de)?\s+empleado\b/i.test(userMessage)
-      ) {
-        return "si";
-      }
-    }
-
-    if (normalizedFieldName.includes("condicionvehiculo")) {
-      const match = userMessage.match(
-        /\b(nuevo|nueva|usado|usada|seminuevo|semi[-\s]?nuevo)\b/i
-      );
-      return match?.[1]?.trim();
-    }
-
-    if (
-      normalizedFieldName.includes("tipovehiculo") ||
-      normalizedFieldName.includes("vehiculo")
-    ) {
-      const match = userMessage.match(/\b(sedan|sedán|suv|pickup|pick-up|camioneta|hatchback|coupe|coupé)\b/i);
-      return match?.[1]?.trim();
-    }
-
-    if (normalizedFieldName.includes("edad")) {
-      const match = userMessage.match(/(\d{1,3})\s*(?:anos|años)?/i);
-      return match?.[1]?.trim();
-    }
-
-    const lastSegment = fieldPath.split(".").pop()?.trim();
-    if (!lastSegment) {
-      return undefined;
-    }
-
-    const escapedField = RunConversationTurnHelper.escapeRegExp(lastSegment);
-    const directPattern = new RegExp(`${escapedField}\\s*(?:es|:)\\s*([^,.\\n]+)`, "i");
-    const directMatch = userMessage.match(directPattern);
-    return directMatch?.[1]?.trim();
-  }
-
-  private async extractFieldsWithLlm(
-    userMessage: string,
-    fields: string[]
-  ): Promise<Record<string, string | number | boolean | null>> {
-    if (fields.length === 0) {
-      return {};
-    }
-
-    const llmInvocation: IAgentLlmInvocation = {
-      temperature: 0,
-      messages: [
-        {
-          role: "system",
-          content: [
-            "Extrae datos estructurados de un mensaje de usuario.",
-            "Responde unicamente con JSON valido.",
-            "Usa exactamente las llaves solicitadas.",
-            "Si no encuentras un valor, usa null.",
-            "No incluyas markdown ni texto adicional."
-          ].join(" ")
-        },
-        {
-          role: "user",
-          content: [
-            `Llaves a extraer: ${fields.join(", ")}`,
-            `Mensaje: ${userMessage}`
-          ].join("\n")
-        }
-      ]
-    };
-
-    const llmResult = await this.agentLlmPort.invoke(llmInvocation);
-    const parsedObject = RunConversationTurnHelper.parseFirstJsonObject(llmResult.text);
-    if (!parsedObject) {
-      return {};
-    }
-
-    const normalizedEntryMap = new Map<string, unknown>();
-    for (const [key, value] of Object.entries(parsedObject)) {
-      normalizedEntryMap.set(RunConversationTurnHelper.normalizeFieldName(key), value);
-    }
-
-    const output: Record<string, string | number | boolean | null> = {};
-    for (const field of fields) {
-      const value =
-        parsedObject[field] ??
-        normalizedEntryMap.get(RunConversationTurnHelper.normalizeFieldName(field));
-      if (
-        value === null ||
-        typeof value === "string" ||
-        typeof value === "number" ||
-        typeof value === "boolean"
-      ) {
-        output[field] = value;
-      }
-    }
-
-    return output;
-  }
-
-  private passesRule(rule: ValidationRule, variables: Record<string, unknown>): boolean {
-    const fieldValue = RunConversationTurnHelper.readVariable(variables, rule.field);
-    if (rule.operator === "exists") {
-      if (fieldValue === null || fieldValue === undefined) {
-        return false;
-      }
-      if (typeof fieldValue === "string") {
-        return fieldValue.trim().length > 0;
-      }
-      if (Array.isArray(fieldValue)) {
-        return fieldValue.length > 0;
-      }
-      return true;
-    }
-
-    if (rule.operator === "equals") {
-      if (rule.value === undefined || fieldValue === undefined || fieldValue === null) {
-        return false;
-      }
-
-      if (typeof fieldValue === "string") {
-        return fieldValue.toLowerCase() === rule.value.toLowerCase();
-      }
-      return String(fieldValue) === rule.value;
-    }
-
-    if (rule.operator === "contains") {
-      if (rule.value === undefined || fieldValue === undefined || fieldValue === null) {
-        return false;
-      }
-
-      if (typeof fieldValue === "string") {
-        return fieldValue.toLowerCase().includes(rule.value.toLowerCase());
-      }
-
-      if (Array.isArray(fieldValue)) {
-        const normalizedValues = fieldValue.map((item) => String(item).toLowerCase());
-        return normalizedValues.includes(rule.value.toLowerCase());
-      }
-
-      return false;
-    }
-
-    if (rule.operator === "regex") {
-      if (rule.value === undefined || typeof fieldValue !== "string") {
-        return false;
-      }
-
-      try {
-        return new RegExp(rule.value).test(fieldValue);
-      } catch {
-        return false;
-      }
-    }
-
-    return false;
-  }
-
-  private buildValidatorFailMessage(failedRules: ValidationRule[]): string {
-    if (failedRules.length === 0) {
-      return "Necesito informacion adicional para continuar.";
-    }
-
-    const fields = failedRules.map((rule) => rule.errorMessage ?? `- ${rule.field}`);
-    return `Antes de continuar necesito estos datos:\n${fields.join("\n")}`;
   }
 
   private resolveToolDatasetNames(toolNodeData: ToolNodeData): string[] {
@@ -1114,37 +658,6 @@ export class RunConversationTurnUseCase {
         return record;
       })
     };
-  }
-
-  private buildResponseText(
-    messageTemplate: string,
-    variables: Record<string, unknown>
-  ): string {
-    const renderedTemplate = messageTemplate.replace(/\{\{\s*([^}]+)\s*\}\}/g, (_, fieldPath) => {
-      const value = RunConversationTurnHelper.readVariable(variables, String(fieldPath));
-      if (value === undefined || value === null) {
-        return "";
-      }
-      if (typeof value === "string") {
-        return value;
-      }
-      return JSON.stringify(value);
-    }).trim();
-
-    const lastAgentResponse = RunConversationTurnHelper.readVariable(variables, LAST_AGENT_RESPONSE_VARIABLE);
-    if (!messageTemplate.includes("{{") && typeof lastAgentResponse === "string") {
-      return `${renderedTemplate}\n\n${lastAgentResponse}`.trim();
-    }
-
-    if (renderedTemplate.length > 0) {
-      return renderedTemplate;
-    }
-
-    if (typeof lastAgentResponse === "string" && lastAgentResponse.length > 0) {
-      return lastAgentResponse;
-    }
-
-    return "No se pudo generar una respuesta.";
   }
 
   private createAssistantMessage(
@@ -1247,19 +760,19 @@ export class RunConversationTurnUseCase {
     return new Date().toISOString();
   }
 
-  private clampText(value: string, maxChars: number): string {
-    const normalized = value.trim();
-    if (normalized.length <= maxChars) {
-      return normalized;
-    }
-
-    return `${normalized.slice(0, maxChars - 3)}...`;
-  }
-
   private buildUserFacingRuntimeErrorMessage(reason: string): string {
     const normalizedReason = reason.toLowerCase();
     if (normalizedReason.includes("la respuesta del agente excedio")) {
       return "El agente tardo demasiado en responder. Intenta nuevamente en unos segundos.";
+    }
+
+    if (
+      normalizedReason.includes("model") ||
+      normalizedReason.includes("modelo") ||
+      normalizedReason.includes("not found") ||
+      normalizedReason.includes("unsupported")
+    ) {
+      return "El modelo configurado no esta disponible en este momento. Intenta nuevamente en unos segundos.";
     }
 
     if (normalizedReason.includes("api key")) {
@@ -1267,6 +780,154 @@ export class RunConversationTurnUseCase {
     }
 
     return "Ocurrio un error al ejecutar el flujo. Intenta nuevamente.";
+  }
+
+  private resolveAgentModel(configuredModel: string | undefined): string {
+    if (!configuredModel) {
+      return PREFERRED_AGENT_MODEL;
+    }
+
+    const normalized = configuredModel.trim().toLowerCase();
+    if (LEGACY_AGENT_MODELS.has(normalized)) {
+      return PREFERRED_AGENT_MODEL;
+    }
+
+    return configuredModel;
+  }
+
+  private resolveAgentRole(agentLabel: string | undefined): "specialist" | "generic" {
+    const normalized = agentLabel?.trim().toLowerCase();
+    return normalized === "generic" ? "generic" : "specialist";
+  }
+
+  private async resolveAgentRuntimeDatasets(
+    agentRole: "specialist" | "generic",
+    userMessage: string,
+    baseDatasets: IToolDataset[]
+  ): Promise<IToolDataset[]> {
+    if (agentRole === "generic") {
+      return [];
+    }
+
+    const merged = new Map<string, IToolDataset>();
+    for (const dataset of baseDatasets) {
+      merged.set(dataset.name, dataset);
+    }
+
+    for (const datasetName of SPECIALIST_CONTEXT_DATASETS) {
+      if (merged.has(datasetName)) {
+        continue;
+      }
+
+      try {
+        const semanticMatches = await this.withTimeout(
+          this.toolRepository.searchSimilarRecords({
+            query: userMessage,
+            datasetName,
+            limit: MAX_TOOL_CONTEXT_RECORDS
+          }),
+          DEFAULT_TOOL_SEMANTIC_TIMEOUT_MS,
+          `La busqueda semantica excedio ${DEFAULT_TOOL_SEMANTIC_TIMEOUT_MS}ms`
+        );
+
+        if (semanticMatches.length > 0) {
+          merged.set(
+            datasetName,
+            this.buildSemanticDataset(datasetName, undefined, semanticMatches)
+          );
+          continue;
+        }
+      } catch {
+        // Si falla la similitud semantica, se intenta fallback directo al dataset local.
+      }
+
+      const dataset = await this.toolRepository.getDatasetByName(datasetName);
+      if (!dataset) {
+        continue;
+      }
+
+      merged.set(datasetName, {
+        name: dataset.name,
+        description: dataset.description,
+        records: dataset.records.slice(0, MAX_TOOL_OUTPUT_RECORDS)
+      });
+    }
+
+    return Array.from(merged.values());
+  }
+
+  private async invokeAgentNodeLlm(
+    agentNodeData: { model?: string; temperature?: number },
+    messages: IAgentLlmInvocation["messages"],
+    maxTokens: number = DEFAULT_AGENT_MAX_TOKENS
+  ): Promise<IAgentLlmResult | null> {
+    const llmInvocation: IAgentLlmInvocation = {
+      messages,
+      model: this.resolveAgentModel(agentNodeData.model),
+      maxTokens
+    };
+    if (agentNodeData.temperature !== undefined) {
+      llmInvocation.temperature = agentNodeData.temperature;
+    }
+
+    try {
+      return await this.withTimeout(
+        this.agentLlmPort.invoke(llmInvocation),
+        this.agentTimeoutMs,
+        `La respuesta del agente excedio ${this.agentTimeoutMs}ms`
+      );
+    } catch (llmError) {
+      const modelFallbackResult = await this.tryInvokeWithFallbackModel(
+        llmInvocation,
+        llmError
+      );
+      return modelFallbackResult ?? null;
+    }
+  }
+
+  private async tryInvokeWithFallbackModel(
+    invocation: IAgentLlmInvocation,
+    rootError: unknown
+  ): Promise<IAgentLlmResult | null> {
+    if (!this.isModelAvailabilityError(rootError)) {
+      return null;
+    }
+
+    const currentModel = invocation.model?.trim().toLowerCase();
+    if (currentModel === RESILIENT_FALLBACK_AGENT_MODEL) {
+      return null;
+    }
+
+    const fallbackInvocation: IAgentLlmInvocation = {
+      ...invocation,
+      model: RESILIENT_FALLBACK_AGENT_MODEL
+    };
+
+    try {
+      const result = await this.withTimeout(
+        this.agentLlmPort.invoke(fallbackInvocation),
+        this.agentTimeoutMs,
+        `La respuesta del agente excedio ${this.agentTimeoutMs}ms`
+      );
+
+      return {
+        ...result,
+        model: RESILIENT_FALLBACK_AGENT_MODEL
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private isModelAvailabilityError(error: unknown): boolean {
+    const message = RunConversationTurnHelper.formatUnknownError(error).toLowerCase();
+    return (
+      message.includes("model") ||
+      message.includes("modelo") ||
+      message.includes("not found") ||
+      message.includes("unsupported") ||
+      message.includes("permission denied")
+    );
   }
 }
 

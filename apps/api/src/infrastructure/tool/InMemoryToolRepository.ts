@@ -1,5 +1,6 @@
 import type {
   IToolDataset,
+  IToolRecord,
   IToolRepository,
   IToolSemanticMatch,
   IToolSemanticSearchInput
@@ -71,11 +72,80 @@ const DEFAULT_DATASETS: IToolDataset[] = [
   }
 ];
 
+const STOP_WORDS = new Set<string>([
+  "a",
+  "al",
+  "algo",
+  "con",
+  "cual",
+  "cuales",
+  "cuales",
+  "cuanto",
+  "de",
+  "del",
+  "el",
+  "en",
+  "es",
+  "esta",
+  "este",
+  "hay",
+  "la",
+  "las",
+  "lo",
+  "los",
+  "me",
+  "mi",
+  "para",
+  "por",
+  "que",
+  "quiero",
+  "se",
+  "si",
+  "sin",
+  "tienen",
+  "tengo",
+  "un",
+  "una",
+  "uno",
+  "y"
+]);
+
+const TOKEN_EQUIVALENTS: Record<string, string[]> = {
+  auto: ["carro", "vehiculo"],
+  carro: ["auto", "vehiculo"],
+  vehiculo: ["auto", "carro"],
+  sedán: ["sedan"],
+  sedanes: ["sedan"],
+  usado: ["seminuevo"],
+  usada: ["seminuevo"],
+  seminuevo: ["usado"],
+  seminuevos: ["usado"],
+  camioneta: ["suv"],
+  suv: ["camioneta"]
+};
+
+interface IIndexedRecord {
+  datasetName: string;
+  record: IToolRecord;
+  searchable: string;
+  titleSearchable: string;
+  tokenSet: Set<string>;
+}
+
 export class InMemoryToolRepository implements IToolRepository {
   private readonly datasets: IToolDataset[];
+  private readonly datasetByName = new Map<string, IToolDataset>();
+  private readonly indexedByDataset = new Map<string, IIndexedRecord[]>();
 
   constructor(initialDatasets: IToolDataset[] = DEFAULT_DATASETS) {
     this.datasets = structuredClone(initialDatasets);
+    for (const dataset of this.datasets) {
+      this.datasetByName.set(dataset.name, dataset);
+      this.indexedByDataset.set(
+        dataset.name,
+        dataset.records.map((record) => this.indexRecord(dataset.name, record))
+      );
+    }
   }
 
   async listDatasets(): Promise<IToolDataset[]> {
@@ -83,45 +153,41 @@ export class InMemoryToolRepository implements IToolRepository {
   }
 
   async getDatasetByName(name: string): Promise<IToolDataset | null> {
-    const dataset = this.datasets.find((item) => item.name === name);
+    const dataset = this.datasetByName.get(name);
     return dataset ? structuredClone(dataset) : null;
   }
 
   async searchSimilarRecords(input: IToolSemanticSearchInput): Promise<IToolSemanticMatch[]> {
-    const normalizedQuery = input.query.trim().toLowerCase();
+    const normalizedQuery = normalizeText(input.query);
     if (!normalizedQuery) {
       return [];
     }
 
-    const tokens = normalizedQuery
-      .split(/\s+/)
-      .map((token) => token.trim())
-      .filter(Boolean);
+    const tokens = expandTokens(
+      tokenize(normalizedQuery).filter((token) => token.length > 1 && !STOP_WORDS.has(token))
+    );
     if (tokens.length === 0) {
       return [];
     }
 
     const limit = Math.max(1, input.limit ?? 5);
-    const scopedDatasets = input.datasetName
-      ? this.datasets.filter((dataset) => dataset.name === input.datasetName)
-      : this.datasets;
+    const scopedDatasetNames = input.datasetName
+      ? [input.datasetName]
+      : this.datasets.map((dataset) => dataset.name);
 
     const matches: IToolSemanticMatch[] = [];
-    for (const dataset of scopedDatasets) {
-      for (const record of dataset.records) {
-        const searchable = `${record.title} ${record.content} ${(record.tags ?? []).join(" ")}`.toLowerCase();
-        const score = tokens.reduce((accumulator, token) => {
-          return searchable.includes(token) ? accumulator + 1 : accumulator;
-        }, 0);
-
-        if (score === 0) {
+    for (const datasetName of scopedDatasetNames) {
+      const indexedRecords = this.indexedByDataset.get(datasetName) ?? [];
+      for (const indexedRecord of indexedRecords) {
+        const score = this.scoreRecord(indexedRecord, normalizedQuery, tokens);
+        if (score <= 0) {
           continue;
         }
 
         matches.push({
-          ...record,
-          datasetName: dataset.name,
-          similarity: score / tokens.length
+          ...indexedRecord.record,
+          datasetName,
+          similarity: Math.min(1, score)
         });
       }
     }
@@ -129,4 +195,83 @@ export class InMemoryToolRepository implements IToolRepository {
     matches.sort((left, right) => right.similarity - left.similarity);
     return structuredClone(matches.slice(0, limit));
   }
+
+  private indexRecord(datasetName: string, record: IToolRecord): IIndexedRecord {
+    const titleSearchable = normalizeText(record.title);
+    const searchable = normalizeText(
+      `${record.title} ${record.content} ${(record.tags ?? []).join(" ")}`
+    );
+
+    return {
+      datasetName,
+      record,
+      searchable,
+      titleSearchable,
+      tokenSet: new Set(tokenize(searchable))
+    };
+  }
+
+  private scoreRecord(
+    record: IIndexedRecord,
+    normalizedQuery: string,
+    tokens: string[]
+  ): number {
+    let hitCount = 0;
+    let titleHitCount = 0;
+
+    for (const token of tokens) {
+      if (record.tokenSet.has(token) || record.searchable.includes(token)) {
+        hitCount += 1;
+        if (record.titleSearchable.includes(token)) {
+          titleHitCount += 1;
+        }
+      }
+    }
+
+    if (hitCount === 0) {
+      return 0;
+    }
+
+    let score = hitCount / tokens.length;
+    if (record.searchable.includes(normalizedQuery)) {
+      score += 0.25;
+    }
+
+    if (titleHitCount > 0) {
+      score += Math.min(0.2, titleHitCount * 0.08);
+    }
+
+    return score;
+  }
+}
+
+function expandTokens(tokens: string[]): string[] {
+  const expanded = new Set<string>();
+
+  for (const token of tokens) {
+    expanded.add(token);
+    const equivalents = TOKEN_EQUIVALENTS[token];
+    for (const equivalent of equivalents ?? []) {
+      expanded.add(normalizeText(equivalent));
+    }
+  }
+
+  return Array.from(expanded);
+}
+
+function tokenize(value: string): string[] {
+  return value
+    .split(/[^a-z0-9]+/)
+    .map((token) => token.trim())
+    .filter(Boolean);
+}
+
+function normalizeText(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 }

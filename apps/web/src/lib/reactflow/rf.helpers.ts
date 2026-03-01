@@ -1,6 +1,5 @@
 import type { Connection } from "reactflow";
 
-import type { NodeType as ContractNodeType } from "@shared/contracts/flow/enums";
 import { flowDefinitionSchema } from "@shared/contracts/flow/schemas";
 import type {
   AgentNodeData,
@@ -74,7 +73,7 @@ export function buildDefaultConfig(nodeType: BuilderNodeType): BuilderNodeData["
         label: "specialist",
         instructions:
           "Responde en espanol neutro y prioriza catalogo, financiamiento y agenda.",
-        model: "gemini-2.5-flash",
+        model: "gemini-3-flash",
         temperature: 0.4
       };
     case "generic":
@@ -83,7 +82,7 @@ export function buildDefaultConfig(nodeType: BuilderNodeType): BuilderNodeData["
         label: "generic",
         instructions:
           "Responde saludos, despedidas y mensajes fuera del alcance de forma amable y breve.",
-        model: "gemini-2.5-flash",
+        model: "gemini-3-flash",
         temperature: 0.3
       };
     case "tool":

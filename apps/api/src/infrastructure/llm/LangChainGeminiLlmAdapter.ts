@@ -19,6 +19,8 @@ export interface ILangChainGeminiLlmAdapterOptions {
   baseUrl?: string;
   defaultTemperature?: number;
   defaultMaxTokens?: number;
+  maxRetries?: number;
+  requestTimeoutMs?: number;
 }
 
 export class LangChainGeminiLlmAdapter implements IAgentLlmPort {
@@ -40,6 +42,10 @@ export class LangChainGeminiLlmAdapter implements IAgentLlmPort {
       modelConfig.maxOutputTokens = effectiveMaxTokens;
     }
 
+    if (this.options.maxRetries !== undefined) {
+      modelConfig.maxRetries = this.options.maxRetries;
+    }
+
     if (this.options.baseUrl) {
       modelConfig.baseUrl = this.options.baseUrl;
     }
@@ -49,14 +55,14 @@ export class LangChainGeminiLlmAdapter implements IAgentLlmPort {
     let response: Awaited<ReturnType<typeof model.invoke>>;
 
     try {
-      response = await model.invoke(toLangChainMessages(primaryMessages));
+      response = await this.invokeModel(model, primaryMessages);
     } catch (error) {
       if (!this.shouldRetryWithReducedContext(error)) {
         throw error;
       }
 
       const fallbackMessages = this.reduceMessagesForRetry(primaryMessages);
-      response = await model.invoke(toLangChainMessages(fallbackMessages));
+      response = await this.invokeModel(model, fallbackMessages);
     }
 
     const extractedText = extractTextFromLlmContent(response.content).trim();
@@ -113,5 +119,19 @@ export class LangChainGeminiLlmAdapter implements IAgentLlmPort {
             content: "Hola"
           }
         ];
+  }
+
+  private async invokeModel(
+    model: ChatGoogleGenerativeAI,
+    messages: IAgentLlmInvocation["messages"]
+  ): Promise<Awaited<ReturnType<typeof model.invoke>>> {
+    if (this.options.requestTimeoutMs === undefined) {
+      return model.invoke(toLangChainMessages(messages));
+    }
+
+    const configuredModel = model.withConfig({
+      timeout: this.options.requestTimeoutMs
+    });
+    return configuredModel.invoke(toLangChainMessages(messages));
   }
 }

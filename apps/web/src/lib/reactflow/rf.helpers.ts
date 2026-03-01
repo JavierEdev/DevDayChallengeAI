@@ -41,6 +41,12 @@ export function createId(prefix: string): string {
 
 export function buildDefaultConfig(nodeType: BuilderNodeType): BuilderNodeData["config"] {
   switch (nodeType) {
+    case "start":
+      return {
+        title: NODE_TITLE_BY_UI.start,
+        description: "Punto de inicio del flujo",
+        welcomeMessage: "Hola, bienvenido al asistente."
+      };
     case "memory":
       return {
         title: NODE_TITLE_BY_UI.memory,

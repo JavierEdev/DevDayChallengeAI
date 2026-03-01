@@ -9,6 +9,7 @@ export const DEFAULT_FLOW_DESCRIPTION =
   "Flujo base para ventas, soporte y agendamiento de pruebas de manejo.";
 
 export const CONTRACT_NODE_TYPE_BY_UI: Record<BuilderNodeType, ContractNodeType> = {
+  start: "start",
   memory: "start",
   orchestrator: "router",
   validator: "validator",
@@ -18,7 +19,7 @@ export const CONTRACT_NODE_TYPE_BY_UI: Record<BuilderNodeType, ContractNodeType>
 };
 
 export const UI_NODE_TYPE_BY_CONTRACT: Record<ContractNodeType, BuilderNodeType> = {
-  start: "memory",
+  start: "start",
   memory: "memory",
   router: "orchestrator",
   validator: "validator",
@@ -28,6 +29,7 @@ export const UI_NODE_TYPE_BY_CONTRACT: Record<ContractNodeType, BuilderNodeType>
 };
 
 export const NODE_TITLE_BY_UI: Record<BuilderNodeType, string> = {
+  start: "Start",
   memory: "Memory",
   orchestrator: "Orchestrator",
   validator: "Validator",
@@ -37,6 +39,7 @@ export const NODE_TITLE_BY_UI: Record<BuilderNodeType, string> = {
 };
 
 export const NODE_SUBTITLE_BY_UI: Record<BuilderNodeType, string> = {
+  start: "Nodo de inicio del flujo",
   memory: "Nodo de inicio y contexto",
   orchestrator: "Ruteo por reglas/intenciones",
   validator: "Validaciones de entrada",
@@ -46,11 +49,11 @@ export const NODE_SUBTITLE_BY_UI: Record<BuilderNodeType, string> = {
 };
 
 const NODE_PALETTE_ORDER: BuilderNodeType[] = [
+  "start",
   "memory",
   "orchestrator",
   "validator",
   "specialist",
-  "generic",
   "tool"
 ];
 
@@ -90,17 +93,6 @@ export const STARTER_FLOW_DEFINITION: FlowDefinition = {
         model: "gemini-2.0-flash",
         temperature: 0.4
       }
-    },
-    {
-      id: "response_1",
-      type: "response",
-      position: { x: 640, y: 120 },
-      data: {
-        title: "Respuesta",
-        description: "Salida hacia el usuario",
-        messageTemplate: "{{assistant_reply}}",
-        endSession: false
-      }
     }
   ],
   edges: [
@@ -108,12 +100,6 @@ export const STARTER_FLOW_DEFINITION: FlowDefinition = {
       id: "edge_start_agent",
       source: "start_1",
       target: "agent_1",
-      kind: "default"
-    },
-    {
-      id: "edge_agent_response",
-      source: "agent_1",
-      target: "response_1",
       kind: "default"
     }
   ]

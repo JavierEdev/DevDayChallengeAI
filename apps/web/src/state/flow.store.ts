@@ -45,7 +45,14 @@ interface FlowStoreState {
   onConnect: (connection: Connection) => void;
   setNodes: (nodes: BuilderFlowNode[]) => void;
   setEdges: (edges: BuilderFlowEdge[]) => void;
-  addNodeFromPalette: (nodeType: BuilderNodeType) => void;
+  addNodeFromPalette: (
+    nodeType: BuilderNodeType,
+    options?: {
+      x: number;
+      y: number;
+    }
+  ) => void;
+  deleteSelectedNode: () => void;
   selectNode: (nodeId: string | null) => void;
   getSelectedNode: () => BuilderFlowNode | null;
   updateSelectedNodeConfig: (patch: Record<string, unknown>) => void;
@@ -137,16 +144,32 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
       };
     }),
 
-  addNodeFromPalette: (nodeType) =>
+  addNodeFromPalette: (nodeType, options) =>
     set((state) => {
       const offset = state.nodes.length;
       const node = createBuilderNode(nodeType, {
-        x: 90 + (offset % 3) * 220,
-        y: 70 + Math.floor(offset / 3) * 170
+        x: options?.x ?? 90 + (offset % 3) * 220,
+        y: options?.y ?? 70 + Math.floor(offset / 3) * 170
       });
       return {
         nodes: [...state.nodes, node],
         selectedNodeId: node.id
+      };
+    }),
+
+  deleteSelectedNode: () =>
+    set((state) => {
+      if (!state.selectedNodeId) {
+        return state;
+      }
+
+      const nodeIdToDelete = state.selectedNodeId;
+      return {
+        nodes: state.nodes.filter((node) => node.id !== nodeIdToDelete),
+        edges: state.edges.filter(
+          (edge) => edge.source !== nodeIdToDelete && edge.target !== nodeIdToDelete
+        ),
+        selectedNodeId: null
       };
     }),
 

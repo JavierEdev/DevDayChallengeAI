@@ -14,9 +14,9 @@
     "typescript": "^5.9.3"
   },
   "scripts": {
-    "dev": "concurrently -n api,web -c cyan,magenta \"npm run dev --workspace @devday/api\" \"npm run dev --prefix apps/web/devday -- --port 3036\"",
+    "dev": "concurrently -n api,web -c cyan,magenta \"npm run dev --workspace @devday/api\" \"npm run dev --prefix apps/web -- --port 3036\"",
     "dev:api": "npm run dev --workspace @devday/api",
-    "dev:web": "npm run dev --prefix apps/web/devday -- --port 3036",
+    "dev:web": "npm run dev --prefix apps/web -- --port 3036",
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"
   },

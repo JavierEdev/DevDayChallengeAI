@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import type {
   AgentNodeData,
   ResponseNodeData,
@@ -20,9 +22,24 @@ import { ValidatorForm } from "./forms/ValidatorForm";
 export function InspectorPanel() {
   const selectedNode = useFlowStore((state) => state.getSelectedNode());
   const updateSelectedNodeConfig = useFlowStore((state) => state.updateSelectedNodeConfig);
+  const deleteSelectedNode = useFlowStore((state) => state.deleteSelectedNode);
+  const [isDeleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   const patchConfig = (patch: Record<string, unknown>) => {
     updateSelectedNodeConfig(patch);
+  };
+
+  const openDeleteDialog = () => {
+    setDeleteDialogOpen(true);
+  };
+
+  const closeDeleteDialog = () => {
+    setDeleteDialogOpen(false);
+  };
+
+  const confirmDeleteNode = () => {
+    deleteSelectedNode();
+    setDeleteDialogOpen(false);
   };
 
   if (!selectedNode) {
@@ -48,6 +65,7 @@ export function InspectorPanel() {
       <InspectorHeader
         nodeId={selectedNode.id}
         contractType={selectedNode.data.contractType}
+        onDeleteNode={openDeleteDialog}
       />
       <div className="panel__body">
         {selectedNode.data.contractType === "start" ? (
@@ -92,6 +110,31 @@ export function InspectorPanel() {
           />
         ) : null}
       </div>
+
+      {isDeleteDialogOpen ? (
+        <div className="confirm-dialog-backdrop" role="dialog" aria-modal="true">
+          <div className="confirm-dialog">
+            <h3 className="confirm-dialog__title">Eliminar nodo</h3>
+            <p className="confirm-dialog__message">Estas seguro de eliminar el node?</p>
+            <div className="confirm-dialog__actions">
+              <button
+                type="button"
+                className="inspector-button is-danger"
+                onClick={confirmDeleteNode}
+              >
+                Eliminar
+              </button>
+              <button
+                type="button"
+                className="inspector-button is-muted"
+                onClick={closeDeleteDialog}
+              >
+                No
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }

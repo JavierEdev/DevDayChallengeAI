@@ -6,9 +6,10 @@ import type { CreateFlowUseCase } from "../application/flow/CreateFlowUseCase.js
 import type { DeleteFlowUseCase } from "../application/flow/DeleteFlowUseCase.js";
 import type { GetFlowUseCase } from "../application/flow/GetFlowUseCase.js";
 import type { UpdateFlowUseCase } from "../application/flow/UpdateFlowUseCase.js";
+import type { RunConversationTurnUseCase } from "../application/chat/RunConversationTurnUseCase.js";
 import type { CreateSessionUseCase } from "../application/session/CreateSessionUseCase.js";
-import type { RunConversationTurnUseCase } from "../application/session/RunConversationTurnUseCase.js";
 import type { ValidateFlowUseCase } from "../application/flow/ValidateFlowUseCase.js";
+import { registerChatRoutes } from "./routes/ChatRoutes.js";
 import { registerFlowRoutes } from "./routes/FlowRoutes.js";
 import { registerSessionRoutes } from "./routes/SessionRoutes.js";
 
@@ -41,6 +42,7 @@ export async function createHttpServer(
       tags: [
         { name: "Health", description: "Health checks del API" },
         { name: "Sessions", description: "Gestion de sesiones de chat runtime" },
+        { name: "Chat", description: "Mensajeria y ejecucion conversacional" },
         { name: "Flows", description: "Gestion y validacion de definiciones de flujo" }
       ]
     }
@@ -67,7 +69,10 @@ export async function createHttpServer(
   );
 
   registerSessionRoutes(fastify, {
-    createSessionUseCase: dependencies.createSessionUseCase,
+    createSessionUseCase: dependencies.createSessionUseCase
+  });
+
+  registerChatRoutes(fastify, {
     runConversationTurnUseCase: dependencies.runConversationTurnUseCase
   });
 

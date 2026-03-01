@@ -1,5 +1,6 @@
 export const NODE_TYPES = [
   "start",
+  "memory",
   "router",
   "validator",
   "tool",
@@ -22,3 +23,6 @@ export type ValidationOperator = (typeof VALIDATION_OPERATORS)[number];
 
 export const EDGE_KINDS = ["default", "condition", "fallback"] as const;
 export type EdgeKind = (typeof EDGE_KINDS)[number];
+
+export const MEMORY_MODES = ["read", "write"] as const;
+export type MemoryMode = (typeof MEMORY_MODES)[number];

@@ -24,6 +24,7 @@ export class CreateSessionUseCase {
     const sessionId = this.newId();
 
     const executionState: ExecutionState = {
+      nextNodeId: flowDefinition.startNodeId,
       visitedNodeIds: [],
       stepCount: 0,
       startedAt: nowIso,

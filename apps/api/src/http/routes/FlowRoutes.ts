@@ -1,9 +1,10 @@
+import { randomUUID } from "node:crypto";
+
 import type { FastifyInstance } from "fastify";
 import {
   createFlowRequestSchema,
   createFlowResponseSchema,
   deleteFlowResponseSchema,
-  flowDefinitionSchema,
   getFlowResponseSchema,
   idSchema,
   type CreateFlowRequest,
@@ -73,9 +74,6 @@ const updateFlowResponseJsonSchema = z.toJSONSchema(updateFlowResponseSchema, {
 const deleteFlowResponseJsonSchema = z.toJSONSchema(deleteFlowResponseSchema, {
   target: "draft-7"
 });
-const flowDefinitionJsonSchema = z.toJSONSchema(flowDefinitionSchema, {
-  target: "draft-7"
-});
 const validateFlowResponseJsonSchema = z.toJSONSchema(validateFlowResponseSchema, {
   target: "draft-7"
 });
@@ -108,9 +106,8 @@ export function registerFlowRoutes(
         });
       }
 
-      const flowValidation = dependencies.validateFlowUseCase.execute(
-        parsedRequest.data as FlowDefinition
-      );
+      const flowCandidate = toFlowDefinitionForValidation(parsedRequest.data as CreateFlowRequest);
+      const flowValidation = dependencies.validateFlowUseCase.execute(flowCandidate);
       if (!flowValidation.valid) {
         return reply.code(400).send({
           error: ErrorCodes.VALIDATION_ERROR,
@@ -347,7 +344,7 @@ export function registerFlowRoutes(
       schema: {
         tags: ["Flows"],
         summary: "Validar una definicion de flujo",
-        body: flowDefinitionJsonSchema,
+        body: createFlowRequestJsonSchema,
         response: {
           200: validateFlowResponseJsonSchema,
           400: errorResponseJsonSchema,
@@ -356,7 +353,7 @@ export function registerFlowRoutes(
       }
     },
     async (request, reply) => {
-      const parsedRequest = flowDefinitionSchema.safeParse(request.body);
+      const parsedRequest = createFlowRequestSchema.safeParse(request.body);
       if (!parsedRequest.success) {
         return reply.code(400).send({
           error: ErrorCodes.VALIDATION_ERROR,
@@ -364,9 +361,8 @@ export function registerFlowRoutes(
         });
       }
 
-      const result = dependencies.validateFlowUseCase.execute(
-        parsedRequest.data as FlowDefinition
-      );
+      const flowCandidate = toFlowDefinitionForValidation(parsedRequest.data as CreateFlowRequest);
+      const result = dependencies.validateFlowUseCase.execute(flowCandidate);
       const parsedResponse = validateFlowResponseSchema.safeParse(result);
       if (!parsedResponse.success) {
         request.log.error(
@@ -381,4 +377,14 @@ export function registerFlowRoutes(
       return reply.code(200).send(parsedResponse.data);
     }
   );
+}
+
+function toFlowDefinitionForValidation(input: CreateFlowRequest): FlowDefinition {
+  const nowIso = new Date().toISOString();
+  return {
+    ...input,
+    id: randomUUID(),
+    createdAt: nowIso,
+    updatedAt: nowIso
+  };
 }

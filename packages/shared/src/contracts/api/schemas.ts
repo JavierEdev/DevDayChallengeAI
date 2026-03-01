@@ -35,7 +35,11 @@ export const sendMessageResponseSchema = z.object({
   assistantMessage: sessionMessageSchema.optional()
 });
 
-export const createFlowRequestSchema = flowDefinitionSchema;
+export const createFlowRequestSchema = flowDefinitionSchema.omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true
+});
 
 export const createFlowResponseSchema = z.object({
   flow: flowDefinitionSchema

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { idSchema, metadataSchema, timestampSchema } from "../common.js";
 import {
   EDGE_KINDS,
+  MEMORY_MODES,
   NODE_TYPES,
   ROUTER_STRATEGIES,
   VALIDATION_OPERATORS
@@ -12,6 +13,7 @@ export const nodeTypeSchema = z.enum(NODE_TYPES);
 export const routerStrategySchema = z.enum(ROUTER_STRATEGIES);
 export const validationOperatorSchema = z.enum(VALIDATION_OPERATORS);
 export const edgeKindSchema = z.enum(EDGE_KINDS);
+export const memoryModeSchema = z.enum(MEMORY_MODES);
 export const validatorModeSchema = z.enum(["all", "any"]);
 
 export const xyPositionSchema = z.object({
@@ -27,22 +29,33 @@ export const nodeUiStateSchema = z.object({
 
 export const baseNodeDataSchema = z.object({
   title: z.string().min(1).optional(),
-  description: z.string().min(1).optional()
+  description: z.string().min(1).optional(),
+  label: z.string().min(1).optional()
 });
 
 export const startNodeDataSchema = baseNodeDataSchema.extend({
   welcomeMessage: z.string().min(1).optional()
 });
 
+export const memoryNodeDataSchema = baseNodeDataSchema.extend({
+  mode: memoryModeSchema,
+  instructions: z.string().min(1).optional()
+});
+
 export const routerRouteSchema = z.object({
-  id: idSchema,
+  id: idSchema.optional(),
+  key: idSchema.optional(),
   label: z.string().min(1),
   targetNodeId: idSchema,
   matchValue: z.string().min(1).optional()
-});
+}).refine(
+  (route) => Boolean(route.id || route.key),
+  { message: "Router route requires id or key." }
+);
 
 export const routerNodeDataSchema = baseNodeDataSchema.extend({
-  strategy: routerStrategySchema,
+  strategy: routerStrategySchema.optional(),
+  instructions: z.string().min(1).optional(),
   routes: z.array(routerRouteSchema),
   fallbackNodeId: idSchema.optional()
 });
@@ -56,17 +69,38 @@ export const validationRuleSchema = z.object({
 });
 
 export const validatorNodeDataSchema = baseNodeDataSchema.extend({
-  rules: z.array(validationRuleSchema),
+  instructions: z.string().min(1).optional(),
+  rules: z.array(validationRuleSchema).optional(),
+  requiredFields: z.array(z.string().min(1)).optional(),
   mode: validatorModeSchema.optional(),
-  onFailNodeId: idSchema.optional()
-});
+  onFailNodeId: idSchema.optional(),
+  onCompleteTargetNodeId: idSchema.optional()
+}).refine(
+  (validatorNodeData) =>
+    Boolean(
+      (validatorNodeData.rules && validatorNodeData.rules.length > 0) ||
+      (validatorNodeData.requiredFields && validatorNodeData.requiredFields.length > 0)
+    ),
+  { message: "Validator node requires rules or requiredFields." }
+);
 
 export const toolNodeDataSchema = baseNodeDataSchema.extend({
-  toolName: z.string().min(1),
+  toolName: z.string().min(1).optional(),
+  toolType: z.string().min(1).optional(),
+  source: z.string().min(1).optional(),
+  availableCollections: z.array(z.string().min(1)).optional(),
+  instructions: z.string().min(1).optional(),
   inputTemplate: z.string().optional(),
   outputVariable: z.string().min(1).optional(),
   timeoutMs: z.number().int().positive().optional()
-});
+}).refine(
+  (toolNodeData) =>
+    Boolean(
+      toolNodeData.toolName ||
+      (toolNodeData.availableCollections && toolNodeData.availableCollections.length > 0)
+    ),
+  { message: "Tool node requires toolName or availableCollections." }
+);
 
 export const agentNodeDataSchema = baseNodeDataSchema.extend({
   instructions: z.string().min(1),
@@ -89,6 +123,11 @@ const flowNodeBaseSchema = z.object({
 export const startFlowNodeSchema = flowNodeBaseSchema.extend({
   type: z.literal("start"),
   data: startNodeDataSchema
+});
+
+export const memoryFlowNodeSchema = flowNodeBaseSchema.extend({
+  type: z.literal("memory"),
+  data: memoryNodeDataSchema
 });
 
 export const routerFlowNodeSchema = flowNodeBaseSchema.extend({
@@ -118,6 +157,7 @@ export const responseFlowNodeSchema = flowNodeBaseSchema.extend({
 
 export const flowNodeSchema = z.discriminatedUnion("type", [
   startFlowNodeSchema,
+  memoryFlowNodeSchema,
   routerFlowNodeSchema,
   validatorFlowNodeSchema,
   toolFlowNodeSchema,

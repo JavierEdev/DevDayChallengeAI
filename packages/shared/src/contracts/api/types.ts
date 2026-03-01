@@ -28,7 +28,7 @@ export interface SendMessageResponse {
   assistantMessage?: SessionMessage;
 }
 
-export type CreateFlowRequest = FlowDefinition;
+export type CreateFlowRequest = Omit<FlowDefinition, "id" | "createdAt" | "updatedAt">;
 
 export interface CreateFlowResponse {
   flow: FlowDefinition;

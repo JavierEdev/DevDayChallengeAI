@@ -1,5 +1,6 @@
 import type {
   EdgeKind,
+  MemoryMode,
   NodeType,
   RouterStrategy,
   ValidationOperator
@@ -19,22 +20,29 @@ export interface NodeUIState {
 export interface BaseNodeData {
   title?: string;
   description?: string;
-  label?: string; // <--- Add this here
+  label?: string;
 }
 
 export interface StartNodeData extends BaseNodeData {
   welcomeMessage?: string;
 }
 
+export interface MemoryNodeData extends BaseNodeData {
+  mode: MemoryMode;
+  instructions?: string;
+}
+
 export interface RouterRoute {
-  id: string;
+  id?: string;
+  key?: string;
   label: string;
   targetNodeId: string;
   matchValue?: string;
 }
 
 export interface RouterNodeData extends BaseNodeData {
-  strategy: RouterStrategy;
+  strategy?: RouterStrategy;
+  instructions?: string;
   routes: RouterRoute[];
   fallbackNodeId?: string;
 }
@@ -48,13 +56,20 @@ export interface ValidationRule {
 }
 
 export interface ValidatorNodeData extends BaseNodeData {
-  rules: ValidationRule[];
+  instructions?: string;
+  rules?: ValidationRule[];
+  requiredFields?: string[];
   mode?: "all" | "any";
   onFailNodeId?: string;
+  onCompleteTargetNodeId?: string;
 }
 
 export interface ToolNodeData extends BaseNodeData {
-  toolName: string;
+  toolName?: string;
+  toolType?: string;
+  source?: string;
+  availableCollections?: string[];
+  instructions?: string;
   inputTemplate?: string;
   outputVariable?: string;
   timeoutMs?: number;
@@ -73,6 +88,7 @@ export interface ResponseNodeData extends BaseNodeData {
 
 export interface FlowNodeDataByType {
   start: StartNodeData;
+  memory: MemoryNodeData;
   router: RouterNodeData;
   validator: ValidatorNodeData;
   tool: ToolNodeData;

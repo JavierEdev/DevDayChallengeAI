@@ -12,16 +12,9 @@ export interface IAgentLlmInvocation {
   maxTokens?: number;
 }
 
-export interface IAgentLlmUsage {
-  inputTokens?: number;
-  outputTokens?: number;
-  totalTokens?: number;
-}
-
 export interface IAgentLlmResult {
   text: string;
   model: string;
-  usage?: IAgentLlmUsage;
 }
 
 export interface IAgentLlmPort {

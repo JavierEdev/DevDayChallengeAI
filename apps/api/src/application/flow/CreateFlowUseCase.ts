@@ -2,15 +2,14 @@ import { randomUUID } from "node:crypto";
 import { FlowAlreadyExistsError } from "../errors/FlowAlreadyExistsError.js";
 
 import type { CreateFlowRequest, CreateFlowResponse } from "@devday/shared";
-import type { ICreateFlowUseCaseDependencies } from "./ICreateFlowUseCaseDependencies.js";
+import type { IFlowRepository } from "../../domain/flow/IFlowRepository.js";
 
 export class CreateFlowUseCase {
-  constructor(private readonly dependencies: ICreateFlowUseCaseDependencies) {}
+  constructor(private readonly flowRepository: IFlowRepository) {}
 
   async execute(input: CreateFlowRequest): Promise<CreateFlowResponse> {
     const flowId = this.newId();
-    const existingFlowDefinition =
-      await this.dependencies.flowRepository.getById(flowId);
+    const existingFlowDefinition = await this.flowRepository.getById(flowId);
     if (existingFlowDefinition) {
       throw new FlowAlreadyExistsError(flowId);
     }
@@ -23,7 +22,7 @@ export class CreateFlowUseCase {
       updatedAt: nowIso,
     };
 
-    await this.dependencies.flowRepository.create(flowDefinition);
+    await this.flowRepository.create(flowDefinition);
 
     return {
       flow: flowDefinition,

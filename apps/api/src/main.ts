@@ -10,7 +10,7 @@ import { UpdateFlowUseCase } from "./application/flow/UpdateFlowUseCase.js";
 import { RunConversationTurnUseCase } from "./application/chat/RunConversationTurnUseCase.js";
 import { CreateSessionUseCase } from "./application/session/CreateSessionUseCase.js";
 import { ValidateFlowUseCase } from "./application/flow/ValidateFlowUseCase.js";
-import { createAgentProviderFactoryFromEnv } from "./infrastructure/llm/CreateAgentLlmPort.js";
+import { createAgentLlmPortFromEnv } from "./infrastructure/llm/CreateAgentLlmPort.js";
 import { InMemoryFlowRepository } from "./infrastructure/flow/InMemoryFlowRepository.js";
 import { InMemorySessionStateStore } from "./infrastructure/session/InMemorySessionStateStore.js";
 import { InMemoryToolRepository } from "./infrastructure/tool/InMemoryToolRepository.js";
@@ -21,35 +21,23 @@ dotenv.config({ path: resolve(currentDirectoryPath, "../.env") });
 
 async function bootstrap(): Promise<void> {
   //Inyeccion de dependencias
-  const providerFactory = createAgentProviderFactoryFromEnv(process.env);
-  const agentLlmPort = providerFactory.createAgentLlmPort();
+  const agentLlmPort = createAgentLlmPortFromEnv(process.env);
 
   //Generacion de instancias
   const flowRepository = new InMemoryFlowRepository();
   const sessionStateStore = new InMemorySessionStateStore();
   const toolRepository = new InMemoryToolRepository();
-  const createFlowUseCase = new CreateFlowUseCase({
-    flowRepository
-  });
-  const getFlowUseCase = new GetFlowUseCase({
-    flowRepository
-  });
-  const updateFlowUseCase = new UpdateFlowUseCase({
-    flowRepository
-  });
-  const deleteFlowUseCase = new DeleteFlowUseCase({
-    flowRepository
-  });
-  const createSessionUseCase = new CreateSessionUseCase({
-    sessionStateStore,
-    flowRepository
-  });
-  const runConversationTurnUseCase = new RunConversationTurnUseCase({
+  const createFlowUseCase = new CreateFlowUseCase(flowRepository);
+  const getFlowUseCase = new GetFlowUseCase(flowRepository);
+  const updateFlowUseCase = new UpdateFlowUseCase(flowRepository);
+  const deleteFlowUseCase = new DeleteFlowUseCase(flowRepository);
+  const createSessionUseCase = new CreateSessionUseCase(sessionStateStore, flowRepository);
+  const runConversationTurnUseCase = new RunConversationTurnUseCase(
     sessionStateStore,
     flowRepository,
     toolRepository,
     agentLlmPort
-  });
+  );
   const validateFlowUseCase = new ValidateFlowUseCase();
 
   //Creacion y arranque del servidor HTTP

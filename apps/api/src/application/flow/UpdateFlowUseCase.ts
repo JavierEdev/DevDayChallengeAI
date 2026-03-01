@@ -1,13 +1,13 @@
 import type { UpdateFlowRequest, UpdateFlowResponse } from "@devday/shared";
 
 import { FlowNotFoundError } from "../errors/FlowNotFoundError.js";
-import type { IUpdateFlowUseCaseDependencies } from "./IUpdateFlowUseCaseDependencies.js";
+import type { IFlowRepository } from "../../domain/flow/IFlowRepository.js";
 
 export class UpdateFlowUseCase {
-  constructor(private readonly dependencies: IUpdateFlowUseCaseDependencies) {}
+  constructor(private readonly flowRepository: IFlowRepository) {}
 
   async execute(flowId: string, input: UpdateFlowRequest): Promise<UpdateFlowResponse> {
-    const existingFlowDefinition = await this.dependencies.flowRepository.getById(flowId);
+    const existingFlowDefinition = await this.flowRepository.getById(flowId);
     if (!existingFlowDefinition) {
       throw new FlowNotFoundError(flowId);
     }
@@ -22,7 +22,7 @@ export class UpdateFlowUseCase {
       updatedAt: nowIso
     };
 
-    await this.dependencies.flowRepository.update(flowDefinition);
+    await this.flowRepository.update(flowDefinition);
 
     return {
       flow: flowDefinition

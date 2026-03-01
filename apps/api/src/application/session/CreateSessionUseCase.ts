@@ -8,14 +8,18 @@ import type {
   TraceEvent
 } from "@devday/shared";
 
+import type { IFlowRepository } from "../../domain/flow/IFlowRepository.js";
+import type { ISessionStateStore } from "../../domain/session/ISessionStateStore.js";
 import { FlowNotFoundError } from "../errors/FlowNotFoundError.js";
-import type { ICreateSessionUseCaseDependencies } from "./ICreateSessionUseCaseDependencies.js";
 
 export class CreateSessionUseCase {
-  constructor(private readonly dependencies: ICreateSessionUseCaseDependencies) {}
+  constructor(
+    private readonly sessionStateStore: ISessionStateStore,
+    private readonly flowRepository: IFlowRepository
+  ) {}
 
   async execute(input: CreateSessionRequest): Promise<CreateSessionResponse> {
-    const flowDefinition = await this.dependencies.flowRepository.getById(input.flowId);
+    const flowDefinition = await this.flowRepository.getById(input.flowId);
     if (!flowDefinition) {
       throw new FlowNotFoundError(input.flowId);
     }
@@ -42,7 +46,7 @@ export class CreateSessionUseCase {
       updatedAt: nowIso
     };
 
-    await this.dependencies.sessionStateStore.create(sessionState);
+    await this.sessionStateStore.create(sessionState);
 
     const traceEvent: TraceEvent = {
       id: this.newId(),

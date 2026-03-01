@@ -15,11 +15,17 @@ import type {
   ValidatorNodeData
 } from "@devday/shared";
 
-import type { IAgentLlmInvocation, IAgentLlmMessage } from "../../domain/agent/IAgentLlmPort.js";
+import type {
+  IAgentLlmInvocation,
+  IAgentLlmMessage,
+  IAgentLlmPort
+} from "../../domain/agent/IAgentLlmPort.js";
+import type { IFlowRepository } from "../../domain/flow/IFlowRepository.js";
+import type { ISessionStateStore } from "../../domain/session/ISessionStateStore.js";
 import type { IToolDataset } from "../../domain/tool/IToolRepository.js";
+import type { IToolRepository } from "../../domain/tool/IToolRepository.js";
 import { FlowNotFoundError } from "../errors/FlowNotFoundError.js";
 import { SessionNotFoundError } from "../errors/SessionNotFoundError.js";
-import type { IRunConversationTurnUseCaseDependencies } from "./IRunConversationTurnUseCaseDependencies.js";
 import { RunConversationTurnHelper } from "./RunConversationTurnHelper.js";
 
 const MAX_TOOL_CONTEXT_RECORDS = 5;
@@ -44,14 +50,19 @@ interface IValidatorEvaluation {
 }
 
 export class RunConversationTurnUseCase {
-  constructor(private readonly dependencies: IRunConversationTurnUseCaseDependencies) {}
+  constructor(
+    private readonly sessionStateStore: ISessionStateStore,
+    private readonly flowRepository: IFlowRepository,
+    private readonly toolRepository: IToolRepository,
+    private readonly agentLlmPort: IAgentLlmPort
+  ) {}
 
   async execute(input: SendMessageRequest): Promise<SendMessageResponse> {
-    const sessionState = await this.dependencies.sessionStateStore.getById(input.sessionId);
+    const sessionState = await this.sessionStateStore.getById(input.sessionId);
     if (!sessionState) {
       throw new SessionNotFoundError(input.sessionId);
     }
-    const flowDefinition = await this.dependencies.flowRepository.getById(sessionState.flowId);
+    const flowDefinition = await this.flowRepository.getById(sessionState.flowId);
     if (!flowDefinition) {
       throw new FlowNotFoundError(sessionState.flowId);
     }
@@ -274,7 +285,7 @@ export class RunConversationTurnUseCase {
           })
         );
 
-        await this.dependencies.sessionStateStore.update(sessionState);
+        await this.sessionStateStore.update(sessionState);
         return {
           session: sessionState,
           status: sessionState.status,
@@ -287,7 +298,7 @@ export class RunConversationTurnUseCase {
         const toolDatasetNames = this.resolveToolDatasetNames(node.data);
         const loadedDatasets: IToolDataset[] = [];
         for (const datasetName of toolDatasetNames) {
-          const dataset = await this.dependencies.toolRepository.getDatasetByName(datasetName);
+          const dataset = await this.toolRepository.getDatasetByName(datasetName);
           if (!dataset) {
             traceEvents.push(
               this.createTraceEvent(sessionState.id, "tool_called", this.nowIso(), {
@@ -355,7 +366,7 @@ export class RunConversationTurnUseCase {
             llmInvocation.temperature = node.data.temperature;
           }
 
-          const llmResult = await this.dependencies.agentLlmPort.invoke(llmInvocation);
+          const llmResult = await this.agentLlmPort.invoke(llmInvocation);
 
           sessionState.variables[LAST_AGENT_RESPONSE_VARIABLE] = llmResult.text;
           sessionState.variables[`agentResponse:${node.id}`] = llmResult.text;
@@ -365,8 +376,7 @@ export class RunConversationTurnUseCase {
               nodeId: node.id,
               message: "Respuesta del agente generada",
               payload: {
-                model: llmResult.model,
-                usage: llmResult.usage
+                model: llmResult.model
               }
             })
           );
@@ -375,8 +385,7 @@ export class RunConversationTurnUseCase {
           if (!next.nextNodeId) {
             const assistantMessage = this.createAssistantMessage(llmResult.text, {
               nodeId: node.id,
-              model: llmResult.model,
-              usage: llmResult.usage
+              model: llmResult.model
             });
             sessionState.messages.push(assistantMessage);
             sessionState.status = "waiting_input";
@@ -395,7 +404,7 @@ export class RunConversationTurnUseCase {
               })
             );
 
-            await this.dependencies.sessionStateStore.update(sessionState);
+            await this.sessionStateStore.update(sessionState);
             return {
               session: sessionState,
               status: sessionState.status,
@@ -463,7 +472,7 @@ export class RunConversationTurnUseCase {
           );
         }
 
-        await this.dependencies.sessionStateStore.update(sessionState);
+        await this.sessionStateStore.update(sessionState);
         return {
           session: sessionState,
           status: sessionState.status,
@@ -822,7 +831,7 @@ export class RunConversationTurnUseCase {
       ]
     };
 
-    const llmResult = await this.dependencies.agentLlmPort.invoke(llmInvocation);
+    const llmResult = await this.agentLlmPort.invoke(llmInvocation);
     const parsedObject = RunConversationTurnHelper.parseFirstJsonObject(llmResult.text);
     if (!parsedObject) {
       return {};
@@ -1003,7 +1012,7 @@ export class RunConversationTurnUseCase {
       })
     );
 
-    await this.dependencies.sessionStateStore.update(sessionState);
+    await this.sessionStateStore.update(sessionState);
 
     return {
       session: sessionState,

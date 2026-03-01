@@ -1,3 +1,4 @@
+import { TextUtils } from "../common/TextUtils.js";
 import type { IToolDataset } from "../../domain/tool/IToolRepository.js";
 import { RunConversationTurnHelper } from "./RunConversationTurnHelper.js";
 
@@ -41,7 +42,7 @@ export class RunConversationTurnSpecialistResponseBuilder {
       return null;
     }
 
-    const normalizedMessage = this.normalizeFreeText(userMessage);
+    const normalizedMessage = TextUtils.shared.normalizeFreeText(userMessage);
     const queryTokens = this.extractDirectQueryTokens(normalizedMessage);
     const hasAgendaIntent = this.isAgendaIntent(normalizedMessage, variables);
     const hasCatalogIntent = this.isCatalogIntent(normalizedMessage, variables);
@@ -124,7 +125,7 @@ export class RunConversationTurnSpecialistResponseBuilder {
     }
 
     const price = this.extractPriceHint(record.content);
-    const summary = this.clampText(record.content, 420);
+    const summary = TextUtils.shared.clampText(record.content, 420);
     const lines = [record.title.trim(), price ? `Precio: ${price}.` : "", summary].filter(Boolean);
     return lines.join("\n");
   }
@@ -148,10 +149,10 @@ export class RunConversationTurnSpecialistResponseBuilder {
     }
 
     if (/\b(financiamiento|credito|enganche|plazo|mensualidad|tasa|leasing|arrendamiento)\b/.test(
-      this.normalizeFreeText(userMessage)
+      TextUtils.shared.normalizeFreeText(userMessage)
     )) {
       const labor = this.readFirstString(variables, ["situacionLaboral"]);
-      const normalizedLabor = this.normalizeFreeText(labor ?? "");
+      const normalizedLabor = TextUtils.shared.normalizeFreeText(labor ?? "");
       if (normalizedLabor.includes("asalari")) {
         lines.push("Como asalariado, normalmente te solicitaran comprobantes de ingresos y constancia laboral.");
       } else if (normalizedLabor.includes("independ")) {
@@ -418,6 +419,19 @@ export class RunConversationTurnSpecialistResponseBuilder {
       return `${twentyFourHourMatch[1].padStart(2, "0")}:${twentyFourHourMatch[2]}`;
     }
 
+    const contextualHourMatch =
+      normalized.match(
+        /\b(?:a\s+las?|hora(?:\s+es)?(?:\s+a\s+las?)?)\s*([01]?\d|2[0-3])(?:\s*horas?)?\b/
+      ) ?? normalized.match(/\b([01]?\d|2[0-3])\s*horas?\b/);
+    if (contextualHourMatch?.[1]) {
+      return `${contextualHourMatch[1].padStart(2, "0")}:00`;
+    }
+
+    const standaloneHourMatch = normalized.match(/^([01]?\d|2[0-3])$/);
+    if (standaloneHourMatch?.[1]) {
+      return `${standaloneHourMatch[1].padStart(2, "0")}:00`;
+    }
+
     const amPmMatch = normalized.match(/\b(\d{1,2})(?::([0-5]\d))?\s*(am|pm)\b/);
     if (!amPmMatch?.[1] || !amPmMatch[3]) {
       return null;
@@ -447,15 +461,15 @@ export class RunConversationTurnSpecialistResponseBuilder {
       return fromMessage;
     }
 
-    const normalizedMessage = this.normalizeFreeText(userMessage);
+    const normalizedMessage = TextUtils.shared.normalizeFreeText(userMessage);
     const today = new Date();
     if (/\bhoy\b/.test(normalizedMessage)) {
-      return this.toIsoDate(today);
+      return TextUtils.shared.toIsoDate(today);
     }
     if (/\bmanana\b/.test(normalizedMessage)) {
       const tomorrow = new Date(today);
       tomorrow.setDate(today.getDate() + 1);
-      return this.toIsoDate(tomorrow);
+      return TextUtils.shared.toIsoDate(tomorrow);
     }
 
     const weekdayTokens: Array<{ token: string; day: number }> = [
@@ -474,7 +488,7 @@ export class RunConversationTurnSpecialistResponseBuilder {
       const daysOffset = (weekday.day - today.getDay() + 7) % 7 || 7;
       const date = new Date(today);
       date.setDate(today.getDate() + daysOffset);
-      return this.toIsoDate(date);
+      return TextUtils.shared.toIsoDate(date);
     }
 
     return null;
@@ -497,7 +511,7 @@ export class RunConversationTurnSpecialistResponseBuilder {
       return reasonFromVariable;
     }
 
-    const normalizedMessage = this.normalizeFreeText(userMessage);
+    const normalizedMessage = TextUtils.shared.normalizeFreeText(userMessage);
     if (/\b(prueba\s+de\s+manejo|test\s+drive)\b/.test(normalizedMessage)) {
       return "prueba de manejo";
     }
@@ -519,9 +533,18 @@ export class RunConversationTurnSpecialistResponseBuilder {
     if (typeFromMessage) {
       return typeFromMessage;
     }
-    return userMessage.match(
-      /\b(?:me\s+interesa|interesado\s+en|quiero\s+probar|quiero\s+ver|sobre)\s+([A-Za-z0-9ÁÉÍÓÚÑáéíóúñ\s-]{3,48})/i
-    )?.[1]?.trim() ?? null;
+
+    const explicitFromMessage = userMessage.match(
+      /\b(?:me\s+interesa|interesado\s+en|quiero\s+probar|quiero\s+ver|veh[ií]culo\s+de\s+inter[eé]s(?:\s+es)?|sobre)\s+([A-Za-z0-9ÁÉÍÓÚÑáéíóúñ\s-]{3,48})/i
+    )?.[1];
+    if (explicitFromMessage) {
+      return explicitFromMessage.replace(/^(?:el|la|los|las)\s+/i, "").trim();
+    }
+
+    const modelWithYear = userMessage.match(
+      /\b([A-Za-zÁÉÍÓÚÑáéíóúñ][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ-]*(?:\s+[A-Za-z0-9ÁÉÍÓÚÑáéíóúñ-]+){0,3}\s+(?:19|20)\d{2})\b/
+    )?.[1];
+    return modelWithYear?.replace(/^(?:y\s+)?(?:el|la|los|las)\s+/i, "").trim() ?? null;
   }
 
   private toCatalogCandidate(record: IToolDataset["records"][number]): ICatalogCandidate {
@@ -566,7 +589,9 @@ export class RunConversationTurnSpecialistResponseBuilder {
     variables: Record<string, unknown>,
     userMessage: string
   ): "nuevo" | "usado" | null {
-    const fromVariable = this.normalizeFreeText(this.readFirstString(variables, ["condicionVehiculo"]) ?? "");
+    const fromVariable = TextUtils.shared.normalizeFreeText(
+      this.readFirstString(variables, ["condicionVehiculo"]) ?? ""
+    );
     if (fromVariable.includes("nuevo")) {
       return "nuevo";
     }
@@ -574,7 +599,7 @@ export class RunConversationTurnSpecialistResponseBuilder {
       return "usado";
     }
 
-    const fromMessage = this.normalizeFreeText(userMessage);
+    const fromMessage = TextUtils.shared.normalizeFreeText(userMessage);
     if (fromMessage.includes("nuevo")) {
       return "nuevo";
     }
@@ -586,8 +611,27 @@ export class RunConversationTurnSpecialistResponseBuilder {
   }
 
   private resolveEmployeeDiscount(variables: Record<string, unknown>): boolean {
-    const normalized = this.normalizeFreeText(this.readFirstString(variables, ["descuentoEmpleado"]) ?? "");
-    return normalized === "si" || normalized === "true" || normalized === "1";
+    const normalized = TextUtils.shared.normalizeFreeText(
+      this.readFirstString(variables, ["descuentoEmpleado"]) ?? ""
+    );
+    if (!normalized) {
+      return false;
+    }
+    if (
+      /\bno\b/.test(normalized) ||
+      /\bsin\s+descuento\b/.test(normalized) ||
+      /\bno\s+tengo\s+descuento\b/.test(normalized)
+    ) {
+      return false;
+    }
+
+    return (
+      normalized === "si" ||
+      normalized === "true" ||
+      normalized === "1" ||
+      /\b(?:si|sí)\s+tengo\s+descuento\b/.test(normalized) ||
+      /\b(?:tengo|cuento\s+con)\s+descuento\b/.test(normalized)
+    );
   }
 
   private readFirstString(
@@ -685,7 +729,7 @@ export class RunConversationTurnSpecialistResponseBuilder {
       .replace(/\b(?:Segmento|Ciudad|Precio|Kilometraje|Combustible|Transmision|Transmisión)\s*:[^.;\n]+[.;]?\s*/gi, "")
       .replace(/\s+/g, " ")
       .trim();
-    return stripped ? this.clampText(stripped, 90) : null;
+    return stripped ? TextUtils.shared.clampText(stripped, 90) : null;
   }
 
   private extractMileageNumber(value: string): number | null {
@@ -703,7 +747,7 @@ export class RunConversationTurnSpecialistResponseBuilder {
   }
 
   private extractVehicleTypeFromText(value: string): string | null {
-    const normalized = this.normalizeFreeText(value);
+    const normalized = TextUtils.shared.normalizeFreeText(value);
     if (!normalized) {
       return null;
     }
@@ -726,25 +770,7 @@ export class RunConversationTurnSpecialistResponseBuilder {
   }
 
   private normalizeDateValue(value: string): string | null {
-    const iso = value.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1];
-    if (iso) {
-      return iso;
-    }
-
-    const slash = value.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/);
-    if (!slash?.[1] || !slash[2] || !slash[3]) {
-      return null;
-    }
-    const day = slash[1].padStart(2, "0");
-    const month = slash[2].padStart(2, "0");
-    return `${slash[3]}-${month}-${day}`;
-  }
-
-  private toIsoDate(date: Date): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
+    return TextUtils.shared.parseIsoDateFromText(value);
   }
 
   private extractDirectQueryTokens(normalizedMessage: string): string[] {
@@ -792,7 +818,9 @@ export class RunConversationTurnSpecialistResponseBuilder {
   ): Array<{ record: IToolDataset["records"][number]; score: number }> {
     return dataset.records
       .map((record) => {
-        const searchable = this.normalizeFreeText(`${record.title} ${record.content} ${(record.tags ?? []).join(" ")}`);
+        const searchable = TextUtils.shared.normalizeFreeText(
+          `${record.title} ${record.content} ${(record.tags ?? []).join(" ")}`
+        );
         const hitCount = queryTokens.reduce(
           (totalHits, token) => (searchable.includes(token) ? totalHits + 1 : totalHits),
           0
@@ -811,7 +839,7 @@ export class RunConversationTurnSpecialistResponseBuilder {
     candidates: string[]
   ): IToolDataset | undefined {
     return datasets.find((dataset) => {
-      const normalizedName = this.normalizeFreeText(dataset.name);
+      const normalizedName = TextUtils.shared.normalizeFreeText(dataset.name);
       return candidates.some((candidate) => normalizedName.includes(candidate));
     });
   }
@@ -860,18 +888,4 @@ export class RunConversationTurnSpecialistResponseBuilder {
     return content.match(/(?:GTQ|Q|USD|\$)\s*\d[\d.,]*/i)?.[0]?.trim() ?? null;
   }
 
-  private clampText(value: string, maxChars: number): string {
-    const normalized = value.trim();
-    return normalized.length <= maxChars ? normalized : `${normalized.slice(0, maxChars - 3)}...`;
-  }
-
-  private normalizeFreeText(value: string): string {
-    return value
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
 }

@@ -1,3 +1,4 @@
+import { TextUtils } from "../common/TextUtils.js";
 import { RunConversationTurnHelper } from "./RunConversationTurnHelper.js";
 
 export class RunConversationTurnValidatorFieldExtractor {
@@ -60,8 +61,16 @@ export class RunConversationTurnValidatorFieldExtractor {
     }
 
     if (normalizedFieldName.includes("nombre")) {
-      return userMessage.match(
+      const explicitName = userMessage.match(
         /(?:mi nombre es|soy)\s+([A-Za-zÁÉÍÓÚÑáéíóúñ]+(?:\s+[A-Za-zÁÉÍÓÚÑáéíóúñ]+){0,4})/i
+      )?.[1]?.trim();
+      if (explicitName) {
+        return explicitName;
+      }
+
+      // Permite capturar formato corto: "Javier Estrada, ..."
+      return userMessage.match(
+        /^\s*([A-ZÁÉÍÓÚÑ][a-záéíóúñ]+(?:\s+[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+){1,3})(?=,|$)/
       )?.[1]?.trim();
     }
 
@@ -95,6 +104,9 @@ export class RunConversationTurnValidatorFieldExtractor {
       (normalizedFieldName.includes("descuento") && normalizedFieldName.includes("empleado"))
     ) {
       const negativeDiscountTokens = [
+        "notengodescuentodeempleado",
+        "notengodescuentoempleado",
+        "notengodescuento",
         "nodescuentodeempleado",
         "nodescuentoempleado",
         "sindescuentodeempleado",
@@ -108,19 +120,6 @@ export class RunConversationTurnValidatorFieldExtractor {
         return "no";
       }
 
-      const positiveDiscountTokens = [
-        "tengodescuentodeempleado",
-        "tengodescuentoempleado",
-        "cuentocondescuentodeempleado",
-        "cuentocondescuentoempleado",
-        "tengodescuento",
-        "cuentocondescuento",
-        "siaplicadescuento"
-      ];
-      if (positiveDiscountTokens.some((token) => normalizedUserMessage.includes(token))) {
-        return "si";
-      }
-
       if (
         /\b(?:no\s+tengo|sin|ningun|ningún|no\s+cuento\s+con)\s+(?:descuento(?:\s+de)?(?:\s+empleado)?|descuentoempleado)\b/i.test(
           userMessage
@@ -132,11 +131,23 @@ export class RunConversationTurnValidatorFieldExtractor {
         return "no";
       }
 
+      const positiveDiscountTokens = [
+        "tengodescuentodeempleado",
+        "tengodescuentoempleado",
+        "cuentocondescuentodeempleado",
+        "cuentocondescuentoempleado",
+        "siaplicadescuento"
+      ];
+      if (positiveDiscountTokens.some((token) => normalizedUserMessage.includes(token))) {
+        return "si";
+      }
+
       if (
         /\b(?:si|sí)\s+(?:tengo|cuento\s+con)\s+(?:descuento(?:\s+de)?(?:\s+empleado)?|descuentoempleado)\b/i.test(
           userMessage
         ) ||
-        /\btengo\s+descuento(?:\s+de)?(?:\s+empleado)?\b/i.test(userMessage)
+        (/\b(?:tengo|cuento\s+con)\s+descuento(?:\s+de)?(?:\s+empleado)?\b/i.test(userMessage) &&
+          !/\b(?:no\s+tengo|no\s+cuento\s+con)\s+descuento(?:\s+de)?(?:\s+empleado)?\b/i.test(userMessage))
       ) {
         return "si";
       }
@@ -159,9 +170,18 @@ export class RunConversationTurnValidatorFieldExtractor {
         return "no aplica";
       }
 
-      return userMessage.match(
-        /\b(?:me\s+interesa|estoy\s+interesad[oa]\s+en|quiero\s+probar|quiero\s+ver|vehiculo\s+de\s+interes(?:\s+es)?|auto\s+de\s+interes(?:\s+es)?)\s+([A-Za-z0-9ÁÉÍÓÚÑáéíóúñ\s-]{3,48})/i
-      )?.[1]?.trim();
+      const explicitInterest = userMessage.match(
+        /\b(?:me\s+interesa|estoy\s+interesad[oa]\s+en|quiero\s+probar|quiero\s+ver|veh[ií]culo\s+de\s+inter[eé]s(?:\s+es)?|auto\s+de\s+inter[eé]s(?:\s+es)?)\s+([A-Za-z0-9ÁÉÍÓÚÑáéíóúñ\s-]{3,48})/i
+      )?.[1];
+      if (explicitInterest) {
+        return explicitInterest.replace(/^(?:el|la|los|las)\s+/i, "").trim();
+      }
+
+      // Fallback para modelos mencionados como "Jetta 2005"
+      const modelWithYear = userMessage.match(
+        /\b([A-Za-zÁÉÍÓÚÑáéíóúñ][A-Za-z0-9ÁÉÍÓÚÑáéíóúñ-]*(?:\s+[A-Za-z0-9ÁÉÍÓÚÑáéíóúñ-]+){0,3}\s+(?:19|20)\d{2})\b/
+      )?.[1];
+      return modelWithYear?.replace(/^(?:y\s+)?(?:el|la|los|las)\s+/i, "").trim();
     }
 
     if (normalizedFieldName.includes("tipovehiculo") || normalizedFieldName.includes("vehiculo")) {
@@ -228,25 +248,20 @@ export class RunConversationTurnValidatorFieldExtractor {
   }
 
   private extractDateValueByHeuristics(userMessage: string): string | undefined {
-    const isoDate = userMessage.match(/\b(\d{4}-\d{2}-\d{2})\b/)?.[1];
+    const isoDate = TextUtils.shared.parseIsoDateFromText(userMessage);
     if (isoDate) {
       return isoDate;
     }
 
-    const slashDate = userMessage.match(/\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/);
-    if (slashDate?.[1] && slashDate[2] && slashDate[3]) {
-      return `${slashDate[3]}-${slashDate[2].padStart(2, "0")}-${slashDate[1].padStart(2, "0")}`;
-    }
-
-    const normalizedMessage = this.normalizeFreeText(userMessage);
+    const normalizedMessage = TextUtils.shared.normalizeFreeText(userMessage);
     const today = new Date();
     if (/\bhoy\b/.test(normalizedMessage)) {
-      return this.toIsoDate(today);
+      return TextUtils.shared.toIsoDate(today);
     }
     if (/\bmanana\b/.test(normalizedMessage)) {
       const tomorrow = new Date(today);
       tomorrow.setDate(today.getDate() + 1);
-      return this.toIsoDate(tomorrow);
+      return TextUtils.shared.toIsoDate(tomorrow);
     }
 
     const weekdays: Array<{ token: string; day: number }> = [
@@ -266,7 +281,7 @@ export class RunConversationTurnValidatorFieldExtractor {
       const daysUntilTarget = (weekday.day - today.getDay() + 7) % 7 || 7;
       const targetDate = new Date(today);
       targetDate.setDate(today.getDate() + daysUntilTarget);
-      return this.toIsoDate(targetDate);
+      return TextUtils.shared.toIsoDate(targetDate);
     }
 
     return undefined;
@@ -276,6 +291,14 @@ export class RunConversationTurnValidatorFieldExtractor {
     const twentyFourHour = userMessage.match(/\b([01]?\d|2[0-3]):([0-5]\d)\b/);
     if (twentyFourHour?.[1] && twentyFourHour[2]) {
       return `${twentyFourHour[1].padStart(2, "0")}:${twentyFourHour[2]}`;
+    }
+
+    const contextualHour =
+      userMessage.match(
+        /\b(?:a\s+las?|hora(?:\s+es)?(?:\s+a\s+las?)?)\s*([01]?\d|2[0-3])(?:\s*horas?)?\b/i
+      ) ?? userMessage.match(/\b([01]?\d|2[0-3])\s*horas?\b/i);
+    if (contextualHour?.[1]) {
+      return `${contextualHour[1].padStart(2, "0")}:00`;
     }
 
     const amPm = userMessage.match(/\b(\d{1,2})(?::([0-5]\d))?\s*(am|pm)\b/i);
@@ -296,7 +319,7 @@ export class RunConversationTurnValidatorFieldExtractor {
   }
 
   private extractAppointmentReasonByHeuristics(userMessage: string): string | undefined {
-    const normalizedMessage = this.normalizeFreeText(userMessage);
+    const normalizedMessage = TextUtils.shared.normalizeFreeText(userMessage);
     if (/\b(prueba\s+de\s+manejo|test\s+drive)\b/.test(normalizedMessage)) {
       return "prueba de manejo";
     }
@@ -305,22 +328,5 @@ export class RunConversationTurnValidatorFieldExtractor {
     }
 
     return undefined;
-  }
-
-  private normalizeFreeText(value: string): string {
-    return value
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
-
-  private toIsoDate(date: Date): string {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
   }
 }

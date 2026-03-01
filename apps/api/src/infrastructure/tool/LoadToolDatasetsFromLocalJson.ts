@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
+import { TextUtils } from "../../application/common/TextUtils.js";
 import type { IToolDataset, IToolRecord } from "../../domain/tool/IToolRepository.js";
 
 interface IFaqQuestion {
@@ -174,10 +175,5 @@ function toText(value: unknown): string {
 }
 
 function normalizeTag(value: string): string {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
+  return TextUtils.shared.normalizeIdentifier(value);
 }

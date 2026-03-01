@@ -11,9 +11,8 @@ import { RunConversationTurnHelper } from "./RunConversationTurnHelper.js";
 import { RunConversationTurnValidatorFieldExtractor } from "./RunConversationTurnValidatorFieldExtractor.js";
 
 const MAX_VALIDATOR_EXTRACTION_FIELDS = 12;
-const DEFAULT_VALIDATOR_LLM_EXTRACTION_TIMEOUT_MS = 1_200;
+const DEFAULT_VALIDATOR_LLM_EXTRACTION_TIMEOUT_MS = 2_500;
 const DEFAULT_VALIDATOR_LLM_FEEDBACK_TIMEOUT_MS = 700;
-const MAX_REMAINING_FIELDS_FOR_LLM_EXTRACTION = 3;
 
 type TimeoutRunner = <T>(
   promise: Promise<T>,
@@ -157,7 +156,21 @@ export class RunConversationTurnValidatorEngine {
     }
 
     const extractedFields = new Set<string>();
-    for (const field of candidateFields) {
+    if (this.useLlm) {
+      try {
+        const llmExtractedValues = await this.withTimeout(
+          this.extractFieldsWithLlm(userMessage, candidateFields),
+          DEFAULT_VALIDATOR_LLM_EXTRACTION_TIMEOUT_MS,
+          `La extraccion del validator excedio ${DEFAULT_VALIDATOR_LLM_EXTRACTION_TIMEOUT_MS}ms`
+        );
+        this.writeExtractedFieldValues(sessionState.variables, llmExtractedValues, extractedFields);
+      } catch {
+        // Si el extractor por LLM falla, se mantiene la validacion normal sin romper el flujo.
+      }
+    }
+
+    const remainingFields = candidateFields.filter((field) => !extractedFields.has(field));
+    for (const field of remainingFields) {
       const extractedValue = this.fieldExtractor.extractFieldValueByHeuristics(field, userMessage);
       if (extractedValue === undefined || extractedValue === null) {
         continue;
@@ -165,40 +178,6 @@ export class RunConversationTurnValidatorEngine {
 
       RunConversationTurnHelper.writeVariable(sessionState.variables, field, extractedValue);
       extractedFields.add(field);
-    }
-
-    const remainingFields = candidateFields.filter((field) => !extractedFields.has(field));
-    if (remainingFields.length === 0) {
-      return Array.from(extractedFields);
-    }
-    if (!this.useLlm) {
-      return Array.from(extractedFields);
-    }
-    if (remainingFields.length > MAX_REMAINING_FIELDS_FOR_LLM_EXTRACTION) {
-      return Array.from(extractedFields);
-    }
-
-    try {
-      const llmExtractedValues = await this.withTimeout(
-        this.extractFieldsWithLlm(userMessage, remainingFields),
-        DEFAULT_VALIDATOR_LLM_EXTRACTION_TIMEOUT_MS,
-        `La extraccion del validator excedio ${DEFAULT_VALIDATOR_LLM_EXTRACTION_TIMEOUT_MS}ms`
-      );
-      for (const [field, value] of Object.entries(llmExtractedValues)) {
-        if (value === undefined || value === null) {
-          continue;
-        }
-
-        const normalizedValue = typeof value === "string" ? value.trim() : String(value);
-        if (!normalizedValue) {
-          continue;
-        }
-
-        RunConversationTurnHelper.writeVariable(sessionState.variables, field, normalizedValue);
-        extractedFields.add(field);
-      }
-    } catch {
-      // Si el extractor por LLM falla, se mantiene la validacion normal sin romper el flujo.
     }
 
     return Array.from(extractedFields);
@@ -222,7 +201,16 @@ export class RunConversationTurnValidatorEngine {
             "Responde unicamente con JSON valido.",
             "Usa exactamente las llaves solicitadas.",
             "Si no encuentras un valor, usa null.",
-            "No incluyas markdown ni texto adicional."
+            "Interpreta lenguaje coloquial y sinonimos.",
+            "No incluyas markdown ni texto adicional.",
+            "Normaliza estos campos cuando aparezcan:",
+            "tipoCliente -> nuevo o existente.",
+            "situacionLaboral -> asalariado o independiente.",
+            "descuentoEmpleado -> si o no.",
+            "condicionVehiculo -> nuevo o usado.",
+            "edadAproximada -> numero entero sin texto.",
+            "horaPreferida -> formato HH:MM en 24 horas.",
+            "vehiculoInteres -> modelo o nombre del vehiculo sin articulos."
           ].join(" ")
         },
         {
@@ -262,6 +250,26 @@ export class RunConversationTurnValidatorEngine {
     }
 
     return output;
+  }
+
+  private writeExtractedFieldValues(
+    variables: Record<string, unknown>,
+    extractedValues: Record<string, string | number | boolean | null>,
+    extractedFields: Set<string>
+  ): void {
+    for (const [field, value] of Object.entries(extractedValues)) {
+      if (value === undefined || value === null) {
+        continue;
+      }
+
+      const normalizedValue = typeof value === "string" ? value.trim() : String(value);
+      if (!normalizedValue) {
+        continue;
+      }
+
+      RunConversationTurnHelper.writeVariable(variables, field, normalizedValue);
+      extractedFields.add(field);
+    }
   }
 
   private passesRule(rule: ValidationRule, variables: Record<string, unknown>): boolean {

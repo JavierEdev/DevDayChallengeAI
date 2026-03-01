@@ -1,5 +1,7 @@
 import type { ValidationRule } from "@devday/shared";
 
+import { TextUtils } from "../common/TextUtils.js";
+
 export class RunConversationTurnHelper {
   static formatUnknownError(error: unknown): string {
     if (error instanceof Error) {
@@ -10,15 +12,11 @@ export class RunConversationTurnHelper {
   }
 
   static normalizeFieldName(fieldPath: string): string {
-    return fieldPath
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]/g, "");
+    return TextUtils.shared.normalizeCompactKey(fieldPath);
   }
 
   static escapeRegExp(value: string): string {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return TextUtils.shared.escapeRegExp(value);
   }
 
   static parseFirstJsonObject(text: string): Record<string, unknown> | null {

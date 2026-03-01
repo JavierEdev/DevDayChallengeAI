@@ -2,6 +2,7 @@ import type { AgentNodeData, FlowDefinition, SessionState } from "@devday/shared
 
 import type { IAgentLlmMessage } from "../../domain/agent/IAgentLlmPort.js";
 import type { IToolDataset } from "../../domain/tool/IToolRepository.js";
+import { TextUtils } from "../common/TextUtils.js";
 import { RunConversationTurnHelper } from "./RunConversationTurnHelper.js";
 import { RunConversationTurnSpecialistResponseBuilder } from "./RunConversationTurnSpecialistResponseBuilder.js";
 
@@ -125,7 +126,7 @@ export class RunConversationTurnAgentComposer {
   }
 
   buildGenericFallbackResponse(userMessage: string): string {
-    const normalizedMessage = this.normalizeFreeText(userMessage);
+    const normalizedMessage = TextUtils.shared.normalizeFreeText(userMessage);
     if (/\b(hola|buenas|que tal|hey)\b/.test(normalizedMessage)) {
       return "Hola, con gusto te ayudo. Si quieres, te apoyo con preguntas generales, catalogo o agendamiento.";
     }
@@ -174,7 +175,9 @@ export class RunConversationTurnAgentComposer {
     for (const dataset of datasets) {
       lines.push(`[${dataset.name}] ${dataset.description}`);
       for (const record of dataset.records.slice(0, this.options.maxToolContextRecords)) {
-        lines.push(`- ${record.title}: ${this.clampText(record.content, this.options.maxToolContextContentChars)}`);
+        lines.push(
+          `- ${record.title}: ${TextUtils.shared.clampText(record.content, this.options.maxToolContextContentChars)}`
+        );
       }
     }
     return lines.join("\n");
@@ -209,18 +212,4 @@ export class RunConversationTurnAgentComposer {
       .join("\n");
   }
 
-  private clampText(value: string, maxChars: number): string {
-    const normalized = value.trim();
-    return normalized.length <= maxChars ? normalized : `${normalized.slice(0, maxChars - 3)}...`;
-  }
-
-  private normalizeFreeText(value: string): string {
-    return value
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, " ")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
 }

@@ -99,7 +99,7 @@ export const STARTER_FLOW_DEFINITION: FlowDefinition = {
             label: "general_info",
             targetNodeId: "validator_faq",
             matchValue:
-              "horario|ubicacion|ubicación|financiamiento|garantia|garantía|compra|proceso|faq|pregunta general"
+              "horario|ubicacion|ubicación|financiamiento|garantia|garantía|proceso|faq|pregunta general|entrega inmediata|tiempo de entrega|stock|inventario|promociones|tramites|trámites|placas|documentos|servicio|mantenimiento|postventa"
           },
           {
             id: "route_vehicle_catalog",
@@ -107,7 +107,7 @@ export const STARTER_FLOW_DEFINITION: FlowDefinition = {
             label: "vehicle_catalog",
             targetNodeId: "validator_catalog",
             matchValue:
-              "catalogo|catálogo|vehiculo|vehículo|auto|carro|precio|disponible|modelo|comparar|sedan|suv|pickup"
+              "catalogo|catálogo|vehiculo|vehículo|auto|autos|carro|carros|precio|modelo|comparar|sedan|suv|pickup|comprar|compra|busco|cotizar|cotizacion|cotización"
           },
           {
             id: "route_appointment_booking",

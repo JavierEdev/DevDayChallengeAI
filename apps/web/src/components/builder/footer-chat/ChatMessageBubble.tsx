@@ -1,8 +1,4 @@
-import type { SessionMessage } from "@shared/contracts/runtime/types";
-
-interface ChatMessageBubbleProps {
-  message: SessionMessage;
-}
+import type { ChatMessageBubbleProps } from "./interfaces/ChatmessageBubbleProps";
 
 function formatTime(timestamp: string): string {
   const date = new Date(timestamp);

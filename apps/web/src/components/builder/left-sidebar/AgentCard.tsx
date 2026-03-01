@@ -1,14 +1,8 @@
 import type { DragEvent } from "react";
-
-import type { BuilderNodeType, NodePaletteItem } from "@/lib/reactflow/rf.types";
 import { BUILDER_NODE_DND_MIME } from "@/lib/reactflow/rf.types";
+import type { AgentCardProps } from "./interfaces/AgentCardProps";
 
-interface AgentCardProps {
-  item: NodePaletteItem;
-  onAdd: (nodeType: BuilderNodeType) => void;
-}
-
-export function AgentCard({ item, onAdd }: AgentCardProps) {
+export function AgentCard({ item, onAdd }: Readonly<AgentCardProps>) {
   const handleDragStart = (event: DragEvent<HTMLButtonElement>) => {
     event.dataTransfer.setData(BUILDER_NODE_DND_MIME, item.type);
     event.dataTransfer.setData("text/plain", item.type);

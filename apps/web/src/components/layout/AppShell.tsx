@@ -5,7 +5,7 @@ interface AppShellProps extends PropsWithChildren {
   footer?: ReactNode;
 }
 
-export function AppShell({ header, footer, children }: AppShellProps) {
+export function AppShell({ header, footer, children }: Readonly<AppShellProps>) {
   return (
     <div className="app-shell">
       {header ? <header className="app-shell__header">{header}</header> : null}

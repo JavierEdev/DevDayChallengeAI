@@ -1,9 +1,7 @@
 import { useCallback, useMemo } from "react";
 import type { DragEvent } from "react";
-import ReactFlow, { Background, Controls, MiniMap } from "reactflow";
+import ReactFlow, { Background, Controls, MiniMap, useReactFlow } from "reactflow";
 import type { Connection } from "reactflow";
-import { useReactFlow } from "reactflow";
-
 import {
   BUILDER_NODE_DND_MIME,
   isBuilderNodeType,
@@ -116,6 +114,7 @@ export function FlowCanvas() {
         onNodeClick={handleNodeClick}
         onPaneClick={handlePaneClick}
         isValidConnection={isValidConnection}
+        deleteKeyCode={null}
         nodesConnectable
         nodesDraggable
         elementsSelectable

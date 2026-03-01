@@ -17,7 +17,7 @@ export function BuilderLayout({
   canvas,
   rightSidebar,
   footer
-}: BuilderLayoutProps) {
+}: Readonly<BuilderLayoutProps>) {
   return (
     <div className="builder-page">
       <AppShell

@@ -1,12 +1,5 @@
-import type { CSSProperties, ReactNode } from "react";
-
-interface SplitPaneProps {
-  left: ReactNode;
-  center: ReactNode;
-  right: ReactNode;
-  leftWidth?: number;
-  rightWidth?: number;
-}
+import type { CSSProperties} from "react";
+import type { SplitPaneProps } from "./interfaces/SplitPanelProps";
 
 export function SplitPane({
   left,
@@ -14,7 +7,7 @@ export function SplitPane({
   right,
   leftWidth = 260,
   rightWidth = 340
-}: SplitPaneProps) {
+}: Readonly<SplitPaneProps>) {
   const style = {
     "--left-pane-width": `${leftWidth}px`,
     "--right-pane-width": `${rightWidth}px`

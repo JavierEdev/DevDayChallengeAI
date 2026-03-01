@@ -5,6 +5,8 @@ import type { RouterNodeData } from "@shared/contracts/flow/types";
 
 import type { BuilderNodeData } from "@/lib/reactflow/rf.types";
 
+import { NodeCard } from "./components/NodeCard";
+
 export function OrchestratorNode({ id, data, selected }: NodeProps<BuilderNodeData>) {
   const config = data.config as RouterNodeData;
   const title = config.title?.trim() || "Orchestrator";
@@ -16,9 +18,13 @@ export function OrchestratorNode({ id, data, selected }: NodeProps<BuilderNodeDa
   const summary = `${config.strategy ?? "intent"} | ${routeCount} rutas`;
 
   return (
-    <div className={`node-card node-card--orchestrator ${selected ? "is-selected" : ""}`}>
-      <Handle className="rf-handle rf-handle--in" type="target" position={Position.Left} id="in" />
-      <Handle className="rf-handle rf-handle--out" type="source" position={Position.Right} id="out" />
+    <NodeCard
+      variant="orchestrator"
+      selected={selected}
+      eyebrow="router"
+      title={title}
+      summary={summary}
+    >
       <Handle
         className="rf-handle rf-handle--out-alt"
         type="source"
@@ -26,9 +32,6 @@ export function OrchestratorNode({ id, data, selected }: NodeProps<BuilderNodeDa
         id="fallback"
         style={{ top: "72%" }}
       />
-      <p className="node-card__eyebrow">router</p>
-      <p className="node-card__title">{title}</p>
-      <p className="node-card__meta">{summary}</p>
-    </div>
+    </NodeCard>
   );
 }

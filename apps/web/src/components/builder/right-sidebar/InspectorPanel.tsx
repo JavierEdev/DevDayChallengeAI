@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import type {
   AgentNodeData,
@@ -43,6 +43,38 @@ export function InspectorPanel() {
     deleteSelectedNode();
     setDeleteDialogOpen(false);
   };
+
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isDeleteDialogOpen || !selectedNode) {
+        return;
+      }
+
+      const isEraseKey = event.key === "Delete" || event.key === "Backspace";
+      if (!isEraseKey) {
+        return;
+      }
+
+      const target = event.target;
+      if (
+        target instanceof HTMLElement &&
+        (target.isContentEditable ||
+          target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT")
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      setDeleteDialogOpen(true);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isDeleteDialogOpen, selectedNode]);
 
   if (!selectedNode) {
     return (

@@ -4,7 +4,7 @@ interface InspectorHeaderProps {
   onDeleteNode?: () => void;
 }
 
-export function InspectorHeader({ nodeId, contractType, onDeleteNode }: InspectorHeaderProps) {
+export function InspectorHeader({ nodeId, contractType, onDeleteNode }: Readonly<InspectorHeaderProps>) {
   return (
     <div className="panel__header">
       <div>

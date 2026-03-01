@@ -19,6 +19,7 @@ export interface NodeUIState {
 export interface BaseNodeData {
   title?: string;
   description?: string;
+  label?: string; // <--- Add this here
 }
 
 export interface StartNodeData extends BaseNodeData {

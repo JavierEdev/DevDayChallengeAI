@@ -1,0 +1,26 @@
+<app-builder-layout>
+  <app-flow-toolbar slot="toolbar"></app-flow-toolbar>
+
+  <section slot="palette" class="panel panel-palette">
+    <app-node-palette></app-node-palette>
+  </section>
+
+  <section slot="canvas" class="panel panel-canvas">
+    <app-flow-canvas></app-flow-canvas>
+  </section>
+
+  <section slot="inspector" class="panel panel-inspector">
+    <h2>Inspector</h2>
+    <p>Selecciona un nodo para editar sus propiedades.</p>
+    <div class="field">
+      <span>Nombre del agente</span>
+      <div class="fake-input">Sin selección</div>
+    </div>
+  </section>
+
+  <section slot="chat" class="panel panel-chat">
+    <h2>Chat de ejecución</h2>
+    <p>Mensajes y trazas aparecerán aquí.</p>
+    <div class="chat-bubble">Esperando ejecución...</div>
+  </section>
+</app-builder-layout>

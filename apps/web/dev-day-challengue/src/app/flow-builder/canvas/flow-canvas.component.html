@@ -1,0 +1,109 @@
+<div
+  class="canvas-wrapper"
+  #canvasWrapper
+  (dragover)="onDragOver($event)"
+  (drop)="onDrop($event)"
+>
+  <ngx-xyflow
+    [nodes]="nodes()"
+    (nodesChange)="nodes.set($event)"
+    [edges]="edges()"
+    (edgesChange)="edges.set($event)"
+    [fitView]="true"
+    (onInit)="onInit($event)"
+    (onConnect)="onConnect($event)"
+
+  >
+    <ngx-xyflow-background></ngx-xyflow-background>
+    <ngx-xyflow-controls></ngx-xyflow-controls>
+    <ngx-xyflow-minimap></ngx-xyflow-minimap>
+
+    <ngx-xyflow-node nodeType="start">
+      <ng-template let-data>
+        <div
+          class="flow-node flow-node-start"
+          style="min-width: 160px; padding: 12px 14px; border-radius: 14px; background: #ffffff; border: 1px solid rgba(27, 30, 29, 0.12); box-shadow: 0 18px 30px -22px rgba(18, 26, 25, 0.55);"
+        >
+          <div class="node-title">{{ data.label }}</div>
+          <div class="node-subtitle">Inicio</div>
+        </div>
+      </ng-template>
+      <ngx-xyflow-handle type="source" position="right"></ngx-xyflow-handle>
+    </ngx-xyflow-node>
+
+    <ngx-xyflow-node nodeType="router">
+      <ng-template let-data>
+        <div
+          class="flow-node flow-node-router"
+          style="min-width: 160px; padding: 12px 14px; border-radius: 14px; background: #ffffff; border: 1px solid rgba(27, 30, 29, 0.12); box-shadow: 0 18px 30px -22px rgba(18, 26, 25, 0.55);"
+        >
+          <div class="node-title">{{ data.label }}</div>
+          <div class="node-subtitle">Ruteo</div>
+        </div>
+      </ng-template>
+      <ngx-xyflow-handle type="target" position="left"></ngx-xyflow-handle>
+      <ngx-xyflow-handle type="source" position="right"></ngx-xyflow-handle>
+    </ngx-xyflow-node>
+
+    <ngx-xyflow-node nodeType="validator">
+      <ng-template let-data>
+        <div
+          class="flow-node flow-node-validator"
+          style="min-width: 160px; padding: 12px 14px; border-radius: 14px; background: #ffffff; border: 1px solid rgba(27, 30, 29, 0.12); box-shadow: 0 18px 30px -22px rgba(18, 26, 25, 0.55);"
+        >
+          <div class="node-title">{{ data.label }}</div>
+          <div class="node-subtitle">Validación</div>
+        </div>
+      </ng-template>
+      <ngx-xyflow-handle type="target" position="left"></ngx-xyflow-handle>
+      <ngx-xyflow-handle type="source" position="right"></ngx-xyflow-handle>
+    </ngx-xyflow-node>
+
+    <ngx-xyflow-node nodeType="tool">
+      <ng-template let-data>
+        <div
+          class="flow-node flow-node-tool"
+          style="min-width: 160px; padding: 12px 14px; border-radius: 14px; background: #ffffff; border: 1px solid rgba(27, 30, 29, 0.12); box-shadow: 0 18px 30px -22px rgba(18, 26, 25, 0.55);"
+        >
+          <div class="node-title">{{ data.label }}</div>
+          <div class="node-subtitle">Herramienta</div>
+        </div>
+      </ng-template>
+      <ngx-xyflow-handle type="target" position="left"></ngx-xyflow-handle>
+      <ngx-xyflow-handle type="source" position="right"></ngx-xyflow-handle>
+    </ngx-xyflow-node>
+
+    <ngx-xyflow-node nodeType="agent">
+      <ng-template let-data>
+        <div
+          class="flow-node flow-node-agent"
+          style="min-width: 160px; padding: 12px 14px; border-radius: 14px; background: #ffffff; border: 1px solid rgba(27, 30, 29, 0.12); box-shadow: 0 18px 30px -22px rgba(18, 26, 25, 0.55);"
+        >
+          <div class="node-title">{{ data.label }}</div>
+          <div class="node-subtitle">Agente</div>
+        </div>
+      </ng-template>
+      <ngx-xyflow-handle type="target" position="left"></ngx-xyflow-handle>
+      <ngx-xyflow-handle type="source" position="right"></ngx-xyflow-handle>
+    </ngx-xyflow-node>
+
+    <ngx-xyflow-node nodeType="response">
+      <ng-template let-data>
+        <div
+          class="flow-node flow-node-response"
+          style="min-width: 160px; padding: 12px 14px; border-radius: 14px; background: #ffffff; border: 1px solid rgba(27, 30, 29, 0.12); box-shadow: 0 18px 30px -22px rgba(18, 26, 25, 0.55);"
+        >
+          <div class="node-title">{{ data.label }}</div>
+          <div class="node-subtitle">Respuesta</div>
+        </div>
+      </ng-template>
+      <ngx-xyflow-handle type="target" position="left"></ngx-xyflow-handle>
+    </ngx-xyflow-node>
+  </ngx-xyflow>
+
+  @if (nodes().length === 0) {
+    <div class="canvas-empty">
+      Arrastra un nodo desde la biblioteca para empezar.
+    </div>
+  }
+</div>

@@ -91,7 +91,7 @@ export const STARTER_FLOW_DEFINITION: FlowDefinition = {
         description: "Agente principal de conversación",
         instructions:
           "Ayuda al usuario con dudas de catálogo, financiamiento y pruebas de manejo.",
-        model: "gemini-2.0-flash",
+        model: "gemini-2.5-flash",
         temperature: 0.4
       }
     }

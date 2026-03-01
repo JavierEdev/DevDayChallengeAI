@@ -74,7 +74,7 @@ export function buildDefaultConfig(nodeType: BuilderNodeType): BuilderNodeData["
         label: "specialist",
         instructions:
           "Responde en espanol neutro y prioriza catalogo, financiamiento y agenda.",
-        model: "gemini-2.0-flash",
+        model: "gemini-2.5-flash",
         temperature: 0.4
       };
     case "generic":
@@ -83,7 +83,7 @@ export function buildDefaultConfig(nodeType: BuilderNodeType): BuilderNodeData["
         label: "generic",
         instructions:
           "Responde saludos, despedidas y mensajes fuera del alcance de forma amable y breve.",
-        model: "gemini-2.0-flash",
+        model: "gemini-2.5-flash",
         temperature: 0.3
       };
     case "tool":

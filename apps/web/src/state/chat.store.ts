@@ -41,14 +41,6 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
 
   startSession: async () => {
     const flowStore = useFlowStore.getState();
-    const validation = await flowStore.validateFlow();
-    if (!validation?.valid) {
-      set({
-        lastError: "El flujo no es valido. Corrige errores antes de chatear."
-      });
-      return null;
-    }
-
     const savedFlow = await flowStore.saveFlow();
     if (!savedFlow) {
       set({ lastError: "No fue posible guardar el flujo." });
@@ -70,6 +62,10 @@ export const useChatStore = create<ChatStoreState>((set, get) => ({
   },
 
   sendMessage: async (rawMessage) => {
+    if (get().isSending) {
+      return;
+    }
+
     const message = (rawMessage ?? get().input).trim();
     if (!message) {
       return;

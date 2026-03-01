@@ -31,13 +31,15 @@ type PersistenceDriver = "memory" | "supabase";
 async function bootstrap(): Promise<void> {
   //Inyeccion de dependencias
   const agentLlmPort = createAgentLlmPortFromEnv(process.env);
+  const persistenceDriver = resolvePersistenceDriver(process.env);
 
   //Generacion de instancias
   const {
     flowRepository,
     sessionStateStore,
     toolRepository
-  } = createPersistenceAdapters(resolvePersistenceDriver(process.env.PERSISTENCE_DRIVER));
+  } = createPersistenceAdapters(persistenceDriver);
+  console.info(`[bootstrap] persistence_driver=${persistenceDriver}`);
   const createFlowUseCase = new CreateFlowUseCase(flowRepository);
   const getFlowUseCase = new GetFlowUseCase(flowRepository);
   const updateFlowUseCase = new UpdateFlowUseCase(flowRepository);
@@ -47,7 +49,16 @@ async function bootstrap(): Promise<void> {
     sessionStateStore,
     flowRepository,
     toolRepository,
-    agentLlmPort
+    agentLlmPort,
+    {
+      ...(() => {
+        const agentTimeoutMs = parseOptionalPositiveInteger(
+          process.env.AGENT_TIMEOUT_MS,
+          "AGENT_TIMEOUT_MS"
+        );
+        return agentTimeoutMs !== undefined ? { agentTimeoutMs } : {};
+      })()
+    }
   );
   const validateFlowUseCase = new ValidateFlowUseCase();
 
@@ -74,9 +85,13 @@ bootstrap().catch((error) => {
   process.exitCode = 1;
 });
 
-function resolvePersistenceDriver(input: string | undefined): PersistenceDriver {
+function resolvePersistenceDriver(env: NodeJS.ProcessEnv): PersistenceDriver {
+  const input = env.PERSISTENCE_DRIVER;
   if (!input) {
-    return "memory";
+    const hasSupabaseCredentials = Boolean(
+      env.SUPABASE_URL?.trim() && env.SUPABASE_SERVICE_ROLE_KEY?.trim()
+    );
+    return hasSupabaseCredentials ? "supabase" : "memory";
   }
 
   const normalized = input.trim().toLowerCase();
@@ -132,4 +147,20 @@ function parseOptionalInteger(value: string | undefined): number | undefined {
   }
 
   return Math.trunc(parsed);
+}
+
+function parseOptionalPositiveInteger(
+  value: string | undefined,
+  variableName: string
+): number | undefined {
+  const parsed = parseOptionalInteger(value);
+  if (parsed === undefined) {
+    return undefined;
+  }
+
+  if (parsed <= 0) {
+    throw new Error(`Invalid positive integer for ${variableName}: ${value}`);
+  }
+
+  return parsed;
 }

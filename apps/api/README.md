@@ -12,7 +12,8 @@ Backend for the hackathon using layered architecture:
 1. Copy `.env.example` to `.env`.
 2. Set `GOOGLE_API_KEY` (or `GEMINI_API_KEY`).
 3. Optional: configure Supabase env vars if using DB persistence.
-4. From repo root run:
+4. Optional: increase `AGENT_TIMEOUT_MS` if your model/context needs more than 15s.
+5. From repo root run:
    - `npm run dev --workspace @devday/api`
 
 ## Persistence mode
@@ -38,6 +39,7 @@ Required for Supabase:
   - Uses `gemini-embedding-001` and supports projection to `768`, `1536` or `3072` dims via `TOOL_EMBEDDING_DIMENSIONS` (default `768`).
 
 When using `PERSISTENCE_DRIVER=supabase`, the `tool` node now attempts semantic retrieval via `match_tool_records` and falls back to full dataset load if semantic search fails or returns no matches.
+Important: semantic retrieval requires `GOOGLE_API_KEY` or `GEMINI_API_KEY` at API runtime (to embed each user query).
 
 ## Endpoints
 

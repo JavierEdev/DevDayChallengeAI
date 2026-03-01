@@ -25,13 +25,26 @@ interface ApiErrorShape {
   message?: string;
 }
 
+const DEFAULT_API_TIMEOUT_MS = 45_000;
+const configuredTimeout = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? DEFAULT_API_TIMEOUT_MS);
+const API_TIMEOUT_MS =
+  Number.isFinite(configuredTimeout) && configuredTimeout > 0
+    ? Math.trunc(configuredTimeout)
+    : DEFAULT_API_TIMEOUT_MS;
+
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:3037",
-  timeout: 60_000
+  timeout: API_TIMEOUT_MS
 });
 
 function toApiError(error: unknown): Error {
   if (axios.isAxiosError(error)) {
+    if (error.code === "ECONNABORTED") {
+      return new Error(
+        `Tiempo de espera agotado (${API_TIMEOUT_MS}ms) al llamar al API (${apiClient.defaults.baseURL}).`
+      );
+    }
+
     const data = error.response?.data as ApiErrorShape | undefined;
     const errorCode = data?.error;
     const message = data?.message ?? error.message;

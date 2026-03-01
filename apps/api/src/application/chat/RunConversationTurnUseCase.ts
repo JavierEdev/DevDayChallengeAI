@@ -34,7 +34,11 @@ const MAX_MESSAGE_HISTORY = 12;
 const MAX_TURN_NODE_STEPS = 24;
 const MAX_VALIDATOR_EXTRACTION_FIELDS = 12;
 const DEFAULT_TOOL_SEMANTIC_TIMEOUT_MS = 3_000;
+const DEFAULT_VALIDATOR_LLM_EXTRACTION_TIMEOUT_MS = 4_000;
+const DEFAULT_AGENT_TIMEOUT_MS = 15_000;
 const LAST_AGENT_RESPONSE_VARIABLE = "lastAgentResponse";
+const LEGACY_AGENT_MODEL = "gemini-2.0-flash";
+const FALLBACK_AGENT_MODEL = "gemini-2.5-flash";
 
 interface INextNodeSelection {
   nextNodeId: string | null;
@@ -51,13 +55,22 @@ interface IValidatorEvaluation {
   failedRules: ValidationRule[];
 }
 
+export interface IRunConversationTurnUseCaseOptions {
+  agentTimeoutMs?: number;
+}
+
 export class RunConversationTurnUseCase {
+  private readonly agentTimeoutMs: number;
+
   constructor(
     private readonly sessionStateStore: ISessionStateStore,
     private readonly flowRepository: IFlowRepository,
     private readonly toolRepository: IToolRepository,
-    private readonly agentLlmPort: IAgentLlmPort
-  ) {}
+    private readonly agentLlmPort: IAgentLlmPort,
+    options: IRunConversationTurnUseCaseOptions = {}
+  ) {
+    this.agentTimeoutMs = resolvePositiveTimeout(options.agentTimeoutMs, DEFAULT_AGENT_TIMEOUT_MS);
+  }
 
   async execute(input: SendMessageRequest): Promise<SendMessageResponse> {
     const sessionState = await this.sessionStateStore.getById(input.sessionId);
@@ -414,13 +427,20 @@ export class RunConversationTurnUseCase {
             messages: llmMessages
           };
           if (node.data.model) {
-            llmInvocation.model = node.data.model;
+            llmInvocation.model =
+              node.data.model.trim().toLowerCase() === LEGACY_AGENT_MODEL
+                ? FALLBACK_AGENT_MODEL
+                : node.data.model;
           }
           if (node.data.temperature !== undefined) {
             llmInvocation.temperature = node.data.temperature;
           }
 
-          const llmResult = await this.agentLlmPort.invoke(llmInvocation);
+          const llmResult = await this.withTimeout(
+            this.agentLlmPort.invoke(llmInvocation),
+            this.agentTimeoutMs,
+            `La respuesta del agente excedio ${this.agentTimeoutMs}ms`
+          );
 
           sessionState.variables[LAST_AGENT_RESPONSE_VARIABLE] = llmResult.text;
           sessionState.variables[`agentResponse:${node.id}`] = llmResult.text;
@@ -794,7 +814,11 @@ export class RunConversationTurnUseCase {
     }
 
     try {
-      const llmExtractedValues = await this.extractFieldsWithLlm(userMessage, remainingFields);
+      const llmExtractedValues = await this.withTimeout(
+        this.extractFieldsWithLlm(userMessage, remainingFields),
+        DEFAULT_VALIDATOR_LLM_EXTRACTION_TIMEOUT_MS,
+        `La extraccion del validator excedio ${DEFAULT_VALIDATOR_LLM_EXTRACTION_TIMEOUT_MS}ms`
+      );
       for (const [field, value] of Object.entries(llmExtractedValues)) {
         if (value === undefined || value === null) {
           continue;
@@ -826,6 +850,36 @@ export class RunConversationTurnUseCase {
     if (normalizedFieldName.includes("presupuesto")) {
       const match = userMessage.match(
         /(?:presupuesto(?:\s+de|\s+es)?|tengo(?:\s+un)?\s+presupuesto(?:\s+de)?)[^\d$QqGgTtUuSsDd]*((?:GTQ|Q|USD|\$)?\s*\d[\d.,]*)/i
+      );
+      return match?.[1]?.trim();
+    }
+
+    if (
+      normalizedFieldName.includes("descuentoempleado") ||
+      (normalizedFieldName.includes("descuento") && normalizedFieldName.includes("empleado"))
+    ) {
+      if (
+        /\b(?:no\s+tengo|sin|ningun|ningún|no\s+cuento\s+con)\s+(?:descuento(?:\s+de)?\s+empleado|descuentoempleado)\b/i.test(
+          userMessage
+        ) ||
+        /\bno\s+soy\s+empleado\b/i.test(userMessage)
+      ) {
+        return "no";
+      }
+
+      if (
+        /\b(?:si|sí)\s+(?:tengo|cuento\s+con)\s+(?:descuento(?:\s+de)?\s+empleado|descuentoempleado)\b/i.test(
+          userMessage
+        ) ||
+        /\btengo\s+descuento(?:\s+de)?\s+empleado\b/i.test(userMessage)
+      ) {
+        return "si";
+      }
+    }
+
+    if (normalizedFieldName.includes("condicionvehiculo")) {
+      const match = userMessage.match(
+        /\b(nuevo|nueva|usado|usada|seminuevo|semi[-\s]?nuevo)\b/i
       );
       return match?.[1]?.trim();
     }
@@ -891,9 +945,16 @@ export class RunConversationTurnUseCase {
       return {};
     }
 
+    const normalizedEntryMap = new Map<string, unknown>();
+    for (const [key, value] of Object.entries(parsedObject)) {
+      normalizedEntryMap.set(RunConversationTurnHelper.normalizeFieldName(key), value);
+    }
+
     const output: Record<string, string | number | boolean | null> = {};
     for (const field of fields) {
-      const value = parsedObject[field];
+      const value =
+        parsedObject[field] ??
+        normalizedEntryMap.get(RunConversationTurnHelper.normalizeFieldName(field));
       if (
         value === null ||
         typeof value === "string" ||
@@ -1104,7 +1165,7 @@ export class RunConversationTurnUseCase {
     );
 
     const assistantMessage = this.createAssistantMessage(
-      "Ocurrio un error al ejecutar el flujo. Intenta nuevamente."
+      this.buildUserFacingRuntimeErrorMessage(reason)
     );
     sessionState.messages.push(assistantMessage);
     traceEvents.push(
@@ -1165,4 +1226,33 @@ export class RunConversationTurnUseCase {
   private nowIso(): string {
     return new Date().toISOString();
   }
+
+  private buildUserFacingRuntimeErrorMessage(reason: string): string {
+    const normalizedReason = reason.toLowerCase();
+    if (normalizedReason.includes("la respuesta del agente excedio")) {
+      return "El agente tardo demasiado en responder. Intenta nuevamente en unos segundos.";
+    }
+
+    if (normalizedReason.includes("api key")) {
+      return "El servicio del modelo no esta configurado correctamente. Intenta nuevamente mas tarde.";
+    }
+
+    return "Ocurrio un error al ejecutar el flujo. Intenta nuevamente.";
+  }
+}
+
+function resolvePositiveTimeout(
+  value: number | undefined,
+  fallback: number
+): number {
+  if (value === undefined) {
+    return fallback;
+  }
+
+  if (!Number.isFinite(value)) {
+    return fallback;
+  }
+
+  const normalized = Math.trunc(value);
+  return normalized > 0 ? normalized : fallback;
 }

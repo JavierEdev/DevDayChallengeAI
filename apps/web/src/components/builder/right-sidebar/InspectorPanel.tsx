@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import type {
   AgentNodeData,
+  MemoryNodeData,
   ResponseNodeData,
   RouterNodeData,
   StartNodeData,
@@ -16,6 +17,7 @@ import { GenericForm } from "./forms/GenericForm";
 import { MemoryForm } from "./forms/MemoryForm";
 import { OrchestratorForm } from "./forms/OrchestratorForm";
 import { SpecialistForm } from "./forms/SpecialistForm";
+import { StartForm } from "./forms/StartForm";
 import { ToolForm } from "./forms/ToolForm";
 import { ValidatorForm } from "./forms/ValidatorForm";
 
@@ -69,8 +71,15 @@ export function InspectorPanel() {
       />
       <div className="panel__body">
         {selectedNode.data.contractType === "start" ? (
-          <MemoryForm
+          <StartForm
             data={selectedNode.data.config as StartNodeData}
+            onChange={(patch) => patchConfig(patch as Record<string, unknown>)}
+          />
+        ) : null}
+
+        {selectedNode.data.contractType === "memory" ? (
+          <MemoryForm
+            data={selectedNode.data.config as MemoryNodeData}
             onChange={(patch) => patchConfig(patch as Record<string, unknown>)}
           />
         ) : null}

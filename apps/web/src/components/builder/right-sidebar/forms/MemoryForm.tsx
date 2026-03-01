@@ -1,8 +1,8 @@
-import type { StartNodeData } from "@shared/contracts/flow/types";
+import type { MemoryNodeData } from "@shared/contracts/flow/types";
 
 interface MemoryFormProps {
-  data: StartNodeData;
-  onChange: (patch: Partial<StartNodeData>) => void;
+  data: MemoryNodeData;
+  onChange: (patch: Partial<MemoryNodeData>) => void;
 }
 
 function optionalText(value: string): string | undefined {
@@ -38,14 +38,29 @@ export function MemoryForm({ data, onChange }: MemoryFormProps) {
       </div>
 
       <div className="inspector-field">
-        <label className="inspector-label" htmlFor="memory-welcome">
-          Welcome Message
+        <label className="inspector-label" htmlFor="memory-mode">
+          Mode
+        </label>
+        <select
+          id="memory-mode"
+          className="inspector-select"
+          value={data.mode}
+          onChange={(event) => onChange({ mode: event.target.value as MemoryNodeData["mode"] })}
+        >
+          <option value="read">read</option>
+          <option value="write">write</option>
+        </select>
+      </div>
+
+      <div className="inspector-field">
+        <label className="inspector-label" htmlFor="memory-instructions">
+          Instructions
         </label>
         <textarea
-          id="memory-welcome"
+          id="memory-instructions"
           className="inspector-textarea"
-          value={data.welcomeMessage ?? ""}
-          onChange={(event) => onChange({ welcomeMessage: optionalText(event.target.value) })}
+          value={data.instructions ?? ""}
+          onChange={(event) => onChange({ instructions: optionalText(event.target.value) })}
         />
       </div>
     </div>

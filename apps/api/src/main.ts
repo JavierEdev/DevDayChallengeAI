@@ -98,10 +98,19 @@ function createPersistenceAdapters(
 } {
   if (driver === "supabase") {
     const supabaseClient = createSupabaseClientFromEnv(process.env);
+    const embeddingDimensions = parseOptionalInteger(process.env.TOOL_EMBEDDING_DIMENSIONS);
     return {
       flowRepository: new SupabaseFlowRepository(supabaseClient),
       sessionStateStore: new SupabaseSessionStateStore(supabaseClient),
-      toolRepository: new SupabaseToolRepository(supabaseClient)
+      toolRepository: new SupabaseToolRepository(supabaseClient, {
+        ...(process.env.GEMINI_API_KEY ? { geminiApiKey: process.env.GEMINI_API_KEY } : {}),
+        ...(process.env.GOOGLE_API_KEY ? { googleApiKey: process.env.GOOGLE_API_KEY } : {}),
+        ...(process.env.GOOGLE_BASE_URL ? { googleBaseUrl: process.env.GOOGLE_BASE_URL } : {}),
+        ...(process.env.TOOL_EMBEDDING_MODEL
+          ? { embeddingModel: process.env.TOOL_EMBEDDING_MODEL }
+          : {}),
+        ...(embeddingDimensions !== undefined ? { embeddingDimensions } : {})
+      })
     };
   }
 
@@ -110,4 +119,17 @@ function createPersistenceAdapters(
     sessionStateStore: new InMemorySessionStateStore(),
     toolRepository: new InMemoryToolRepository()
   };
+}
+
+function parseOptionalInteger(value: string | undefined): number | undefined {
+  if (!value) {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Invalid integer value: ${value}`);
+  }
+
+  return Math.trunc(parsed);
 }

@@ -9,6 +9,38 @@ interface ToolFormProps {
   onChange: (patch: Partial<ToolNodeData>) => void;
 }
 
+interface ToolPreset {
+  key: string;
+  label: string;
+  toolName: string;
+  instructions: string;
+  outputVariable: string;
+}
+
+const TOOL_PRESETS: ToolPreset[] = [
+  {
+    key: "faq",
+    label: "Consultas Generales",
+    toolName: "faqs",
+    instructions: "Busca informacion de horarios, ubicacion, financiamiento y garantias.",
+    outputVariable: "tool_context_faq"
+  },
+  {
+    key: "catalogo",
+    label: "Catalogo Vehiculos",
+    toolName: "catalogo",
+    instructions: "Busca vehiculos segun presupuesto, tipo y disponibilidad.",
+    outputVariable: "tool_context_catalogo"
+  },
+  {
+    key: "agenda",
+    label: "Agendamiento Cita",
+    toolName: "agenda",
+    instructions: "Busca disponibilidad de fechas y horarios para citas.",
+    outputVariable: "tool_context_agenda"
+  }
+];
+
 function optionalText(value: string): string | undefined {
   const next = value.trim();
   return next.length > 0 ? next : undefined;
@@ -36,8 +68,35 @@ export function ToolForm({ data, onChange }: ToolFormProps) {
       });
   }, []);
 
+  const applyPreset = (preset: ToolPreset) => {
+    onChange({
+      title: preset.label,
+      toolName: preset.toolName,
+      availableCollections: [preset.toolName],
+      instructions: preset.instructions,
+      outputVariable: preset.outputVariable,
+      inputTemplate: "{{last_user_message}}"
+    });
+  };
+
   return (
     <div className="inspector-form">
+      <div className="inspector-field">
+        <label className="inspector-label">Presets por Caso</label>
+        <div className="confirm-dialog__actions">
+          {TOOL_PRESETS.map((preset) => (
+            <button
+              key={preset.key}
+              type="button"
+              className="inspector-button is-muted"
+              onClick={() => applyPreset(preset)}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="inspector-field">
         <label className="inspector-label" htmlFor="tool-title">
           Titulo
@@ -66,6 +125,18 @@ export function ToolForm({ data, onChange }: ToolFormProps) {
             <option key={datasetName} value={datasetName} />
           ))}
         </datalist>
+      </div>
+
+      <div className="inspector-field">
+        <label className="inspector-label" htmlFor="tool-instructions">
+          Instrucciones
+        </label>
+        <textarea
+          id="tool-instructions"
+          className="inspector-textarea"
+          value={data.instructions ?? ""}
+          onChange={(event) => onChange({ instructions: optionalText(event.target.value) })}
+        />
       </div>
 
       <div className="inspector-field">

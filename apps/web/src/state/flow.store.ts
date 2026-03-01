@@ -18,7 +18,7 @@ import {
   toFlowDefinition
 } from "@/lib/reactflow/rf.helpers";
 import type { BuilderFlowEdge, BuilderFlowNode, BuilderNodeType } from "@/lib/reactflow/rf.types";
-import { getFlow, upsertFlow, validateFlow } from "@/services/flow-executor.api";
+import { createFlow, getFlow, upsertFlow, validateFlow } from "@/services/flow-executor.api";
 
 interface FlowMetaPatch {
   id?: string;
@@ -310,7 +310,11 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
   saveFlow: async () => {
     set({ isSaving: true, lastError: null });
     try {
-      const saved = await upsertFlow(get().buildFlowDefinition());
+      const draft = get().buildFlowDefinition();
+      const saved =
+        draft.id.trim().length === 0 || draft.id === DEFAULT_FLOW_ID
+          ? await createFlow(draft)
+          : await upsertFlow(draft);
       const parsed = fromFlowDefinition(saved);
       set({
         flowId: saved.id,

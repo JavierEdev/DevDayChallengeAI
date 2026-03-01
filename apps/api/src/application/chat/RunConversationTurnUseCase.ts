@@ -24,6 +24,7 @@ import type { IFlowRepository } from "../../domain/flow/IFlowRepository.js";
 import type { ISessionStateStore } from "../../domain/session/ISessionStateStore.js";
 import type { IToolDataset } from "../../domain/tool/IToolRepository.js";
 import type { IToolRepository } from "../../domain/tool/IToolRepository.js";
+import type { IToolSemanticMatch } from "../../domain/tool/IToolRepository.js";
 import { FlowNotFoundError } from "../errors/FlowNotFoundError.js";
 import { SessionNotFoundError } from "../errors/SessionNotFoundError.js";
 import { RunConversationTurnHelper } from "./RunConversationTurnHelper.js";
@@ -32,6 +33,7 @@ const MAX_TOOL_CONTEXT_RECORDS = 5;
 const MAX_MESSAGE_HISTORY = 12;
 const MAX_TURN_NODE_STEPS = 24;
 const MAX_VALIDATOR_EXTRACTION_FIELDS = 12;
+const DEFAULT_TOOL_SEMANTIC_TIMEOUT_MS = 3_000;
 const LAST_AGENT_RESPONSE_VARIABLE = "lastAgentResponse";
 
 interface INextNodeSelection {
@@ -296,9 +298,61 @@ export class RunConversationTurnUseCase {
 
       if (node.type === "tool") {
         const toolDatasetNames = this.resolveToolDatasetNames(node.data);
+        const semanticTimeoutMs = Math.max(
+          250,
+          node.data.timeoutMs ?? DEFAULT_TOOL_SEMANTIC_TIMEOUT_MS
+        );
         const loadedDatasets: IToolDataset[] = [];
         for (const datasetName of toolDatasetNames) {
           const dataset = await this.toolRepository.getDatasetByName(datasetName);
+          let semanticMatches: IToolSemanticMatch[] = [];
+          try {
+            semanticMatches = await this.withTimeout(
+              this.toolRepository.searchSimilarRecords({
+                query: input.message,
+                datasetName,
+                limit: MAX_TOOL_CONTEXT_RECORDS
+              }),
+              semanticTimeoutMs,
+              `La busqueda semantica excedio ${semanticTimeoutMs}ms`
+            );
+          } catch (error) {
+            traceEvents.push(
+              this.createTraceEvent(sessionState.id, "tool_called", this.nowIso(), {
+                nodeId: node.id,
+                message: `Busqueda semantica fallo para dataset "${datasetName}". Se usa fallback.`,
+                payload: {
+                  dataset: datasetName,
+                  error: RunConversationTurnHelper.formatUnknownError(error)
+                }
+              })
+            );
+          }
+
+          if (semanticMatches.length > 0) {
+            const semanticDataset = this.buildSemanticDataset(
+              datasetName,
+              dataset?.description,
+              semanticMatches
+            );
+            loadedDatasets.push(semanticDataset);
+            runtimeToolDatasets.push(semanticDataset);
+
+            traceEvents.push(
+              this.createTraceEvent(sessionState.id, "tool_called", this.nowIso(), {
+                nodeId: node.id,
+                message: `Tool dataset "${datasetName}" recuperado por similitud semantica`,
+                payload: {
+                  dataset: datasetName,
+                  records: semanticDataset.records.length,
+                  semantic: true,
+                  topSimilarity: semanticMatches[0]?.similarity ?? 0
+                }
+              })
+            );
+            continue;
+          }
+
           if (!dataset) {
             traceEvents.push(
               this.createTraceEvent(sessionState.id, "tool_called", this.nowIso(), {
@@ -931,6 +985,54 @@ export class RunConversationTurnUseCase {
     }
 
     return Array.from(names);
+  }
+
+  private async withTimeout<T>(
+    promise: Promise<T>,
+    timeoutMs: number,
+    timeoutMessage: string
+  ): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const timeoutId = setTimeout(() => {
+        reject(new Error(timeoutMessage));
+      }, timeoutMs);
+
+      promise
+        .then((value) => {
+          clearTimeout(timeoutId);
+          resolve(value);
+        })
+        .catch((error) => {
+          clearTimeout(timeoutId);
+          reject(error);
+        });
+    });
+  }
+
+  private buildSemanticDataset(
+    datasetName: string,
+    datasetDescription: string | undefined,
+    semanticMatches: IToolSemanticMatch[]
+  ): IToolDataset {
+    return {
+      name: datasetName,
+      description: datasetDescription ?? `Resultados semanticos para ${datasetName}`,
+      records: semanticMatches.map((match) => {
+        const record = {
+          id: match.id,
+          title: match.title,
+          content: match.content
+        };
+        if (Array.isArray(match.tags) && match.tags.length > 0) {
+          return {
+            ...record,
+            tags: match.tags
+          };
+        }
+
+        return record;
+      })
+    };
   }
 
   private buildResponseText(

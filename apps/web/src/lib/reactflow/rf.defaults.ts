@@ -10,11 +10,11 @@ export const DEFAULT_FLOW_DESCRIPTION =
 
 export const CONTRACT_NODE_TYPE_BY_UI: Record<BuilderNodeType, ContractNodeType> = {
   start: "start",
-  memory: "start",
+  memory: "memory",
   orchestrator: "router",
   validator: "validator",
   specialist: "agent",
-  generic: "response",
+  generic: "agent",
   tool: "tool"
 };
 
@@ -44,7 +44,7 @@ export const NODE_SUBTITLE_BY_UI: Record<BuilderNodeType, string> = {
   orchestrator: "Ruteo por reglas/intenciones",
   validator: "Validaciones de entrada",
   specialist: "Agente especializado",
-  generic: "Respuesta final al usuario",
+  generic: "Agente generico conversacional",
   tool: "Consumo de dataset JSON"
 };
 
@@ -54,6 +54,7 @@ const NODE_PALETTE_ORDER: BuilderNodeType[] = [
   "orchestrator",
   "validator",
   "specialist",
+  "generic",
   "tool"
 ];
 

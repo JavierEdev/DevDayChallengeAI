@@ -4,6 +4,7 @@ import type { NodeType as ContractNodeType } from "@shared/contracts/flow/enums"
 import type {
   AgentNodeData,
   FlowNodeData,
+  MemoryNodeData,
   ResponseNodeData,
   RouterNodeData,
   StartNodeData,
@@ -35,7 +36,7 @@ export type BuilderFlowEdge = Edge;
 
 export type BuilderNodeConfigByType = {
   start: StartNodeData;
-  memory: StartNodeData;
+  memory: MemoryNodeData;
   orchestrator: RouterNodeData;
   validator: ValidatorNodeData;
   specialist: AgentNodeData;

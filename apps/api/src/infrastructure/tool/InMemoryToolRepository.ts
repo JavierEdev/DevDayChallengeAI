@@ -1,4 +1,9 @@
-import type { IToolDataset, IToolRepository } from "../../domain/tool/IToolRepository.js";
+import type {
+  IToolDataset,
+  IToolRepository,
+  IToolSemanticMatch,
+  IToolSemanticSearchInput
+} from "../../domain/tool/IToolRepository.js";
 
 const DEFAULT_DATASETS: IToolDataset[] = [
   {
@@ -80,5 +85,48 @@ export class InMemoryToolRepository implements IToolRepository {
   async getDatasetByName(name: string): Promise<IToolDataset | null> {
     const dataset = this.datasets.find((item) => item.name === name);
     return dataset ? structuredClone(dataset) : null;
+  }
+
+  async searchSimilarRecords(input: IToolSemanticSearchInput): Promise<IToolSemanticMatch[]> {
+    const normalizedQuery = input.query.trim().toLowerCase();
+    if (!normalizedQuery) {
+      return [];
+    }
+
+    const tokens = normalizedQuery
+      .split(/\s+/)
+      .map((token) => token.trim())
+      .filter(Boolean);
+    if (tokens.length === 0) {
+      return [];
+    }
+
+    const limit = Math.max(1, input.limit ?? 5);
+    const scopedDatasets = input.datasetName
+      ? this.datasets.filter((dataset) => dataset.name === input.datasetName)
+      : this.datasets;
+
+    const matches: IToolSemanticMatch[] = [];
+    for (const dataset of scopedDatasets) {
+      for (const record of dataset.records) {
+        const searchable = `${record.title} ${record.content} ${(record.tags ?? []).join(" ")}`.toLowerCase();
+        const score = tokens.reduce((accumulator, token) => {
+          return searchable.includes(token) ? accumulator + 1 : accumulator;
+        }, 0);
+
+        if (score === 0) {
+          continue;
+        }
+
+        matches.push({
+          ...record,
+          datasetName: dataset.name,
+          similarity: score / tokens.length
+        });
+      }
+    }
+
+    matches.sort((left, right) => right.similarity - left.similarity);
+    return structuredClone(matches.slice(0, limit));
   }
 }

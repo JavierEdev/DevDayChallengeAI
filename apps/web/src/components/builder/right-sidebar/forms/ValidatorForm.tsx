@@ -1,42 +1,96 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
-import type { ValidationRule, ValidatorNodeData } from "@shared/contracts/flow/types";
+import type { ValidatorNodeData } from "@shared/contracts/flow/types";
 
 interface ValidatorFormProps {
   data: ValidatorNodeData;
   onChange: (patch: Partial<ValidatorNodeData>) => void;
 }
 
+interface ValidatorPreset {
+  key: string;
+  label: string;
+  fields: string[];
+  instructions: string;
+}
+
+const VALIDATOR_PRESETS: ValidatorPreset[] = [
+  {
+    key: "faq",
+    label: "Consultas Generales",
+    fields: ["tipoCliente", "situacionLaboral", "edadAproximada"],
+    instructions:
+      "Recopila perfil base del cliente antes de responder preguntas generales del negocio."
+  },
+  {
+    key: "catalogo",
+    label: "Catalogo Vehiculos",
+    fields: ["presupuesto", "condicionVehiculo", "descuentoEmpleado", "tipoVehiculo"],
+    instructions:
+      "Valida datos del cliente para recomendar vehiculos segun perfil y presupuesto."
+  },
+  {
+    key: "agenda",
+    label: "Agendamiento Cita",
+    fields: ["nombreCompleto", "fechaPreferida", "horaPreferida", "motivoCita", "vehiculoInteres"],
+    instructions:
+      "Solicita datos completos para confirmar cita de prueba de manejo o asesoria."
+  }
+];
+
 function optionalText(value: string): string | undefined {
   const next = value.trim();
   return next.length > 0 ? next : undefined;
 }
 
-function stringifyRules(rules: ValidationRule[]): string {
-  return JSON.stringify(rules, null, 2);
+function stringifyRequiredFields(requiredFields: string[] | undefined): string {
+  return (requiredFields ?? []).join("\n");
+}
+
+function parseRequiredFields(rawValue: string): string[] {
+  return rawValue
+    .split(/\r?\n|,/)
+    .map((value) => value.trim())
+    .filter(Boolean);
 }
 
 export function ValidatorForm({ data, onChange }: ValidatorFormProps) {
-  const initialDraft = useMemo(() => stringifyRules(data.rules ?? []), [data.rules]);
-  const [rulesDraft, setRulesDraft] = useState(initialDraft);
-  const [rulesError, setRulesError] = useState<string | null>(null);
+  const [requiredFieldsDraft, setRequiredFieldsDraft] = useState(
+    stringifyRequiredFields(data.requiredFields)
+  );
 
   useEffect(() => {
-    setRulesDraft(initialDraft);
-  }, [initialDraft]);
+    setRequiredFieldsDraft(stringifyRequiredFields(data.requiredFields));
+  }, [data.requiredFields]);
 
-  const handleRulesBlur = () => {
-    try {
-      const parsed = JSON.parse(rulesDraft) as ValidationRule[];
-      onChange({ rules: parsed });
-      setRulesError(null);
-    } catch {
-      setRulesError("JSON invalido para rules.");
-    }
+  const applyPreset = (preset: ValidatorPreset) => {
+    const nextRequiredFields = preset.fields;
+    setRequiredFieldsDraft(stringifyRequiredFields(nextRequiredFields));
+    onChange({
+      requiredFields: nextRequiredFields,
+      rules: undefined,
+      instructions: preset.instructions
+    });
   };
 
   return (
     <div className="inspector-form">
+      <div className="inspector-field">
+        <label className="inspector-label">Presets por Caso</label>
+        <div className="confirm-dialog__actions">
+          {VALIDATOR_PRESETS.map((preset) => (
+            <button
+              key={preset.key}
+              type="button"
+              className="inspector-button is-muted"
+              onClick={() => applyPreset(preset)}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="inspector-field">
         <label className="inspector-label" htmlFor="validator-title">
           Titulo
@@ -65,6 +119,18 @@ export function ValidatorForm({ data, onChange }: ValidatorFormProps) {
       </div>
 
       <div className="inspector-field">
+        <label className="inspector-label" htmlFor="validator-instructions">
+          Instrucciones
+        </label>
+        <textarea
+          id="validator-instructions"
+          className="inspector-textarea"
+          value={data.instructions ?? ""}
+          onChange={(event) => onChange({ instructions: optionalText(event.target.value) })}
+        />
+      </div>
+
+      <div className="inspector-field">
         <label className="inspector-label" htmlFor="validator-fail">
           On Fail Node Id
         </label>
@@ -77,18 +143,22 @@ export function ValidatorForm({ data, onChange }: ValidatorFormProps) {
       </div>
 
       <div className="inspector-field">
-        <label className="inspector-label" htmlFor="validator-rules">
-          Rules (JSON)
+        <label className="inspector-label" htmlFor="validator-required-fields">
+          Campos requeridos
         </label>
         <textarea
-          id="validator-rules"
+          id="validator-required-fields"
           className="inspector-textarea"
-          value={rulesDraft}
-          onChange={(event) => setRulesDraft(event.target.value)}
-          onBlur={handleRulesBlur}
+          value={requiredFieldsDraft}
+          onChange={(event) => setRequiredFieldsDraft(event.target.value)}
+          onBlur={() =>
+            onChange({
+              requiredFields: parseRequiredFields(requiredFieldsDraft),
+              rules: undefined
+            })
+          }
         />
-        <p className="inspector-help">Formato: array de reglas con field/operator/value.</p>
-        {rulesError ? <p className="inspector-error">{rulesError}</p> : null}
+        <p className="inspector-help">Uno por linea. Ejemplo: nombre, presupuesto, tipoVehiculo.</p>
       </div>
     </div>
   );

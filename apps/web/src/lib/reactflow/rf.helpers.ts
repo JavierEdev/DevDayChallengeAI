@@ -7,7 +7,9 @@ import type {
   FlowDefinition,
   FlowEdge,
   FlowNode,
+  MemoryNodeData,
   ResponseNodeData,
+  RouterRoute,
   RouterNodeData,
   StartNodeData,
   ToolNodeData,
@@ -50,8 +52,9 @@ export function buildDefaultConfig(nodeType: BuilderNodeType): BuilderNodeData["
     case "memory":
       return {
         title: NODE_TITLE_BY_UI.memory,
-        description: "Punto de entrada al flujo",
-        welcomeMessage: "Hola, te ayudo con todo lo relacionado a autos."
+        description: "Lee o guarda contexto de la sesion",
+        mode: "read",
+        instructions: "Recupera el contexto reciente de la conversacion."
       };
     case "orchestrator":
       return {
@@ -63,11 +66,12 @@ export function buildDefaultConfig(nodeType: BuilderNodeType): BuilderNodeData["
       return {
         title: NODE_TITLE_BY_UI.validator,
         mode: "all",
-        rules: []
+        requiredFields: []
       };
     case "specialist":
       return {
         title: NODE_TITLE_BY_UI.specialist,
+        label: "specialist",
         instructions:
           "Responde en espanol neutro y prioriza catalogo, financiamiento y agenda.",
         model: "gemini-2.0-flash",
@@ -76,8 +80,11 @@ export function buildDefaultConfig(nodeType: BuilderNodeType): BuilderNodeData["
     case "generic":
       return {
         title: NODE_TITLE_BY_UI.generic,
-        messageTemplate: "{{assistant_reply}}",
-        endSession: false
+        label: "generic",
+        instructions:
+          "Responde saludos, despedidas y mensajes fuera del alcance de forma amable y breve.",
+        model: "gemini-2.0-flash",
+        temperature: 0.3
       };
     case "tool":
       return {
@@ -125,26 +132,52 @@ function toStartData(config: BuilderNodeData["config"]): StartNodeData {
   };
 }
 
-function toRouterData(config: BuilderNodeData["config"]): RouterNodeData {
+function toMemoryData(config: BuilderNodeData["config"]): MemoryNodeData {
+  const data = config as Partial<MemoryNodeData>;
+  return {
+    title: data.title,
+    description: data.description,
+    mode: data.mode ?? "read",
+    instructions: data.instructions
+  };
+}
+
+function toRouterData(
+  config: BuilderNodeData["config"],
+  inferredRoutes: RouterRoute[]
+): RouterNodeData {
   const data = config as Partial<RouterNodeData>;
+  const configuredRoutes = Array.isArray(data.routes) ? data.routes : [];
   return {
     title: data.title,
     description: data.description,
     strategy: data.strategy ?? "intent",
-    routes: data.routes ?? [],
+    instructions: data.instructions,
+    routes: configuredRoutes.length > 0 ? configuredRoutes : inferredRoutes,
     fallbackNodeId: data.fallbackNodeId
   };
 }
 
 function toValidatorData(config: BuilderNodeData["config"]): ValidatorNodeData {
   const data = config as Partial<ValidatorNodeData>;
-  return {
+  const validatorData: ValidatorNodeData = {
     title: data.title,
     description: data.description,
+    instructions: data.instructions,
     mode: data.mode ?? "all",
-    rules: data.rules ?? [],
-    onFailNodeId: data.onFailNodeId
+    onFailNodeId: data.onFailNodeId,
+    onCompleteTargetNodeId: data.onCompleteTargetNodeId
   };
+
+  if (Array.isArray(data.requiredFields) && data.requiredFields.length > 0) {
+    validatorData.requiredFields = data.requiredFields;
+  }
+
+  if (Array.isArray(data.rules) && data.rules.length > 0) {
+    validatorData.rules = data.rules;
+  }
+
+  return validatorData;
 }
 
 function toToolData(config: BuilderNodeData["config"]): ToolNodeData {
@@ -152,7 +185,11 @@ function toToolData(config: BuilderNodeData["config"]): ToolNodeData {
   return {
     title: data.title,
     description: data.description,
+    toolType: data.toolType,
+    source: data.source,
     toolName: data.toolName ?? "faqs",
+    availableCollections: data.availableCollections,
+    instructions: data.instructions,
     inputTemplate: data.inputTemplate,
     outputVariable: data.outputVariable,
     timeoutMs: data.timeoutMs
@@ -164,6 +201,7 @@ function toAgentData(config: BuilderNodeData["config"]): AgentNodeData {
   return {
     title: data.title,
     description: data.description,
+    label: data.label,
     instructions: data.instructions ?? "Responde de forma clara y breve.",
     model: data.model,
     temperature: data.temperature
@@ -180,7 +218,42 @@ function toResponseData(config: BuilderNodeData["config"]): ResponseNodeData {
   };
 }
 
-function toContractNode(node: BuilderFlowNode): FlowNode {
+function normalizeRouteKey(value: string, index: number): string {
+  const normalized = value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  if (normalized.length > 0) {
+    return normalized;
+  }
+
+  return `route_${index + 1}`;
+}
+
+function inferRouterRoutes(sourceNodeId: string, edges: BuilderFlowEdge[]): RouterRoute[] {
+  const outgoingEdges = edges.filter((edge) => edge.source === sourceNodeId);
+  return outgoingEdges.map((edge, index) => {
+    const rawLabel = edge.label ? String(edge.label).trim() : "";
+    const label = rawLabel || `Ruta ${index + 1}`;
+    const route: RouterRoute = {
+      id: edge.id,
+      key: normalizeRouteKey(rawLabel || edge.target, index),
+      label,
+      targetNodeId: edge.target
+    };
+
+    if (rawLabel) {
+      route.matchValue = rawLabel.toLowerCase();
+    }
+
+    return route;
+  });
+}
+
+function toContractNode(node: BuilderFlowNode, edges: BuilderFlowEdge[]): FlowNode {
   const width = node.width ?? undefined;
   const height = node.height ?? undefined;
   const hasUiState = width !== undefined || height !== undefined || node.selected !== undefined;
@@ -207,11 +280,17 @@ function toContractNode(node: BuilderFlowNode): FlowNode {
         type: "start",
         data: toStartData(node.data.config)
       };
+    case "memory":
+      return {
+        ...baseNode,
+        type: "memory",
+        data: toMemoryData(node.data.config)
+      };
     case "router":
       return {
         ...baseNode,
         type: "router",
-        data: toRouterData(node.data.config)
+        data: toRouterData(node.data.config, inferRouterRoutes(node.id, edges))
       };
     case "validator":
       return {
@@ -257,12 +336,21 @@ function toContractEdge(edge: BuilderFlowEdge): FlowEdge {
   };
 }
 
-function toUiNodeType(contractType: ContractNodeType): BuilderNodeType {
-  return UI_NODE_TYPE_BY_CONTRACT[contractType];
+function toUiNodeType(node: FlowNode): BuilderNodeType {
+  if (node.type === "agent") {
+    const label = node.data.label?.toLowerCase().trim();
+    if (label === "generic") {
+      return "generic";
+    }
+
+    return "specialist";
+  }
+
+  return UI_NODE_TYPE_BY_CONTRACT[node.type];
 }
 
 export function toFlowDefinition(snapshot: BuilderFlowSnapshot): FlowDefinition {
-  const nodes = snapshot.nodes.map(toContractNode);
+  const nodes = snapshot.nodes.map((node) => toContractNode(node, snapshot.edges));
   const edges = snapshot.edges.map(toContractEdge);
   const startNode =
     nodes.find((node) => node.type === "start") ?? nodes.find((node) => node.id.length > 0);
@@ -287,7 +375,7 @@ export function fromFlowDefinition(flow: FlowDefinition): {
   const parsed = flowDefinitionSchema.parse(flow);
   const nodes: BuilderFlowNode[] = parsed.nodes.map((node) => ({
     id: node.id,
-    type: toUiNodeType(node.type),
+    type: toUiNodeType(node),
     position: node.position,
     data: {
       contractType: node.type,

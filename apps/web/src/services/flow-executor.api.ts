@@ -26,8 +26,8 @@ interface ApiErrorShape {
 }
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:3036",
-  timeout: 15_000
+  baseURL: import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:3037",
+  timeout: 60_000
 });
 
 function toApiError(error: unknown): Error {
@@ -52,7 +52,16 @@ function isFlowNotFoundError(error: unknown): boolean {
 
 export async function createFlow(flowDefinition: FlowDefinition): Promise<FlowDefinition> {
   try {
-    const requestBody = createFlowRequestSchema.parse(flowDefinitionSchema.parse(flowDefinition));
+    const parsedFlow = flowDefinitionSchema.parse(flowDefinition);
+    const requestBody = createFlowRequestSchema.parse({
+      name: parsedFlow.name,
+      description: parsedFlow.description,
+      version: parsedFlow.version,
+      startNodeId: parsedFlow.startNodeId,
+      nodes: parsedFlow.nodes,
+      edges: parsedFlow.edges,
+      metadata: parsedFlow.metadata
+    });
     const response = await apiClient.post("/v1/flows", requestBody);
     return createFlowResponseSchema.parse(response.data).flow;
   } catch (error) {

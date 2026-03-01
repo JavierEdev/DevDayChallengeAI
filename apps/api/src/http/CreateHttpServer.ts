@@ -1,4 +1,5 @@
 import Fastify, { type FastifyInstance } from "fastify";
+import cors from "@fastify/cors";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 
@@ -30,6 +31,13 @@ export async function createHttpServer(
     logger: {
       level: process.env.LOG_LEVEL ?? "info"
     }
+  });
+
+  await fastify.register(cors, {
+    origin: true,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+    credentials: false
   });
 
   await fastify.register(swagger, {

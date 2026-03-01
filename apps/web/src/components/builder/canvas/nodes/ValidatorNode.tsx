@@ -8,7 +8,16 @@ import type { BuilderNodeData } from "@/lib/reactflow/rf.types";
 export function ValidatorNode({ data, selected }: NodeProps<BuilderNodeData>) {
   const config = data.config as ValidatorNodeData;
   const title = config.title?.trim() || "Validator";
-  const summary = `${config.mode ?? "all"} | ${config.rules?.length ?? 0} reglas`;
+  const hasRules = Array.isArray(config.rules) && config.rules.length > 0;
+  const hasRequiredFields =
+    Array.isArray(config.requiredFields) && config.requiredFields.length > 0;
+  const summaryCount = hasRules
+    ? config.rules.length
+    : hasRequiredFields
+      ? config.requiredFields.length
+      : 0;
+  const summaryUnit = hasRules ? "reglas" : "campos";
+  const summary = `${config.mode ?? "all"} | ${summaryCount} ${summaryUnit}`;
 
   return (
     <div className={`node-card node-card--validator ${selected ? "is-selected" : ""}`}>

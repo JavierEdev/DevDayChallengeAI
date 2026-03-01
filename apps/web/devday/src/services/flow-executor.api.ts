@@ -26,7 +26,7 @@ interface ApiErrorShape {
 }
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:3000",
+  baseURL: import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:3037",
   timeout: 15_000
 });
 
@@ -125,7 +125,7 @@ export async function sendMessage(
       sessionId,
       message
     });
-    const response = await apiClient.post(`/v1/sessions/${sessionId}/messages`, {
+    const response = await apiClient.post(`/v1/chat/sessions/${sessionId}/messages`, {
       message: requestBody.message,
       metadata: requestBody.metadata
     });

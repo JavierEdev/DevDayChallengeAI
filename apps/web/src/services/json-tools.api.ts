@@ -29,7 +29,7 @@ const JSON_DATASETS: JsonToolDataset[] = [
     ]
   },
   {
-    name: "catalog",
+    name: "catalogo",
     description: "Catalogo resumido de vehiculos",
     records: [
       {

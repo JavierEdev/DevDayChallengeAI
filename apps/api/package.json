@@ -7,9 +7,7 @@
     "dev": "tsx watch src/main.ts",
     "start": "tsx src/main.ts",
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit",
-    "seed:supabase:tools": "tsx scripts/SeedSupabaseTools.ts",
-    "backfill:supabase:embeddings": "tsx scripts/BackfillSupabaseToolEmbeddings.ts"
+    "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@devday/shared": "file:../../packages/shared",
@@ -18,7 +16,6 @@
     "@fastify/swagger-ui": "^5.2.5",
     "@langchain/core": "^1.1.29",
     "@langchain/google-genai": "^2.1.22",
-    "@supabase/supabase-js": "^2.49.8",
     "dotenv": "^17.3.1",
     "fastify": "^5.7.4"
   },

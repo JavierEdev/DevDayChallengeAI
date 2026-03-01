@@ -30,12 +30,15 @@ import { SessionNotFoundError } from "../errors/SessionNotFoundError.js";
 import { RunConversationTurnHelper } from "./RunConversationTurnHelper.js";
 
 const MAX_TOOL_CONTEXT_RECORDS = 5;
+const MAX_TOOL_OUTPUT_RECORDS = 20;
+const MAX_TOOL_CONTEXT_CONTENT_CHARS = 360;
 const MAX_MESSAGE_HISTORY = 12;
 const MAX_TURN_NODE_STEPS = 24;
 const MAX_VALIDATOR_EXTRACTION_FIELDS = 12;
 const DEFAULT_TOOL_SEMANTIC_TIMEOUT_MS = 3_000;
 const DEFAULT_VALIDATOR_LLM_EXTRACTION_TIMEOUT_MS = 4_000;
-const DEFAULT_AGENT_TIMEOUT_MS = 15_000;
+const DEFAULT_AGENT_TIMEOUT_MS = 60_000;
+const DEFAULT_AGENT_MAX_TOKENS = 320;
 const LAST_AGENT_RESPONSE_VARIABLE = "lastAgentResponse";
 const LEGACY_AGENT_MODEL = "gemini-2.0-flash";
 const FALLBACK_AGENT_MODEL = "gemini-2.5-flash";
@@ -317,7 +320,6 @@ export class RunConversationTurnUseCase {
         );
         const loadedDatasets: IToolDataset[] = [];
         for (const datasetName of toolDatasetNames) {
-          const dataset = await this.toolRepository.getDatasetByName(datasetName);
           let semanticMatches: IToolSemanticMatch[] = [];
           try {
             semanticMatches = await this.withTimeout(
@@ -345,7 +347,7 @@ export class RunConversationTurnUseCase {
           if (semanticMatches.length > 0) {
             const semanticDataset = this.buildSemanticDataset(
               datasetName,
-              dataset?.description,
+              undefined,
               semanticMatches
             );
             loadedDatasets.push(semanticDataset);
@@ -366,6 +368,7 @@ export class RunConversationTurnUseCase {
             continue;
           }
 
+          const dataset = await this.toolRepository.getDatasetByName(datasetName);
           if (!dataset) {
             traceEvents.push(
               this.createTraceEvent(sessionState.id, "tool_called", this.nowIso(), {
@@ -386,14 +389,18 @@ export class RunConversationTurnUseCase {
               message: `Tool dataset "${dataset.name}" cargado`,
               payload: {
                 dataset: dataset.name,
-                records: dataset.records.length
+                records: dataset.records.length,
+                semantic: false,
+                reason: "fallback_no_semantic_matches_or_disabled"
               }
             })
           );
         }
 
         if (node.data.outputVariable) {
-          const outputRecords = loadedDatasets.flatMap((dataset) => dataset.records);
+          const outputRecords = loadedDatasets
+            .flatMap((dataset) => dataset.records)
+            .slice(0, MAX_TOOL_OUTPUT_RECORDS);
           sessionState.variables[node.data.outputVariable] = outputRecords;
         }
 
@@ -435,6 +442,7 @@ export class RunConversationTurnUseCase {
           if (node.data.temperature !== undefined) {
             llmInvocation.temperature = node.data.temperature;
           }
+          llmInvocation.maxTokens = DEFAULT_AGENT_MAX_TOKENS;
 
           const llmResult = await this.withTimeout(
             this.agentLlmPort.invoke(llmInvocation),
@@ -615,7 +623,7 @@ export class RunConversationTurnUseCase {
     for (const dataset of datasets) {
       lines.push(`[${dataset.name}] ${dataset.description}`);
       for (const record of dataset.records.slice(0, MAX_TOOL_CONTEXT_RECORDS)) {
-        lines.push(`- ${record.title}: ${record.content}`);
+        lines.push(`- ${record.title}: ${this.clampText(record.content, MAX_TOOL_CONTEXT_CONTENT_CHARS)}`);
       }
     }
 
@@ -848,10 +856,22 @@ export class RunConversationTurnUseCase {
     }
 
     if (normalizedFieldName.includes("presupuesto")) {
-      const match = userMessage.match(
-        /(?:presupuesto(?:\s+de|\s+es)?|tengo(?:\s+un)?\s+presupuesto(?:\s+de)?)[^\d$QqGgTtUuSsDd]*((?:GTQ|Q|USD|\$)?\s*\d[\d.,]*)/i
+      const explicitBudgetMatch = userMessage.match(
+        /(?:presupuesto(?:\s+de|\s+es)?|tengo(?:\s+un)?\s+presupuesto(?:\s+de)?)[^\d$QqGgTtUuSsDd]*((?:GTQ|GT|Q|USD|\$)?\s*\d[\d.,]*)/i
       );
-      return match?.[1]?.trim();
+      if (explicitBudgetMatch?.[1]) {
+        return explicitBudgetMatch[1].trim();
+      }
+
+      const conversationalBudgetMatch = userMessage.match(
+        /\b(?:tengo|cuento\s+con|manejo|dispongo\s+de)\s+((?:GTQ|GT|Q|USD|\$)\s*\d[\d.,]*)\b/i
+      );
+      if (conversationalBudgetMatch?.[1]) {
+        return conversationalBudgetMatch[1].trim();
+      }
+
+      const currencyAmountMatch = userMessage.match(/\b((?:GTQ|GT|Q|USD|\$)\s*\d[\d.,]*)\b/i);
+      return currencyAmountMatch?.[1]?.trim();
     }
 
     if (
@@ -1225,6 +1245,15 @@ export class RunConversationTurnUseCase {
 
   private nowIso(): string {
     return new Date().toISOString();
+  }
+
+  private clampText(value: string, maxChars: number): string {
+    const normalized = value.trim();
+    if (normalized.length <= maxChars) {
+      return normalized;
+    }
+
+    return `${normalized.slice(0, maxChars - 3)}...`;
   }
 
   private buildUserFacingRuntimeErrorMessage(reason: string): string {

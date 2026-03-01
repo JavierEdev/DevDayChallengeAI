@@ -15,31 +15,26 @@ import type { ISessionStateStore } from "./domain/session/ISessionStateStore.js"
 import type { IToolRepository } from "./domain/tool/IToolRepository.js";
 import { createAgentLlmPortFromEnv } from "./infrastructure/llm/CreateAgentLlmPort.js";
 import { InMemoryFlowRepository } from "./infrastructure/flow/InMemoryFlowRepository.js";
-import { SupabaseFlowRepository } from "./infrastructure/flow/SupabaseFlowRepository.js";
 import { InMemorySessionStateStore } from "./infrastructure/session/InMemorySessionStateStore.js";
-import { SupabaseSessionStateStore } from "./infrastructure/session/SupabaseSessionStateStore.js";
 import { InMemoryToolRepository } from "./infrastructure/tool/InMemoryToolRepository.js";
-import { SupabaseToolRepository } from "./infrastructure/tool/SupabaseToolRepository.js";
-import { createSupabaseClientFromEnv } from "./infrastructure/supabase/CreateSupabaseClient.js";
+import { loadToolDatasetsFromLocalJson } from "./infrastructure/tool/LoadToolDatasetsFromLocalJson.js";
 
 const currentFilePath = fileURLToPath(import.meta.url);
 const currentDirectoryPath = dirname(currentFilePath);
+const repoRootPath = resolve(currentDirectoryPath, "../../..");
 dotenv.config({ path: resolve(currentDirectoryPath, "../.env") });
-
-type PersistenceDriver = "memory" | "supabase";
 
 async function bootstrap(): Promise<void> {
   //Inyeccion de dependencias
   const agentLlmPort = createAgentLlmPortFromEnv(process.env);
-  const persistenceDriver = resolvePersistenceDriver(process.env);
 
   //Generacion de instancias
   const {
     flowRepository,
     sessionStateStore,
     toolRepository
-  } = createPersistenceAdapters(persistenceDriver);
-  console.info(`[bootstrap] persistence_driver=${persistenceDriver}`);
+  } = createInMemoryAdapters();
+  console.info("[bootstrap] persistence_driver=memory");
   const createFlowUseCase = new CreateFlowUseCase(flowRepository);
   const getFlowUseCase = new GetFlowUseCase(flowRepository);
   const updateFlowUseCase = new UpdateFlowUseCase(flowRepository);
@@ -85,55 +80,39 @@ bootstrap().catch((error) => {
   process.exitCode = 1;
 });
 
-function resolvePersistenceDriver(env: NodeJS.ProcessEnv): PersistenceDriver {
-  const input = env.PERSISTENCE_DRIVER;
-  if (!input) {
-    const hasSupabaseCredentials = Boolean(
-      env.SUPABASE_URL?.trim() && env.SUPABASE_SERVICE_ROLE_KEY?.trim()
-    );
-    return hasSupabaseCredentials ? "supabase" : "memory";
-  }
-
-  const normalized = input.trim().toLowerCase();
-  if (normalized === "memory" || normalized === "supabase") {
-    return normalized;
-  }
-
-  throw new Error(
-    `Unsupported PERSISTENCE_DRIVER: ${input}. Available: memory, supabase`
-  );
-}
-
-function createPersistenceAdapters(
-  driver: PersistenceDriver
-): {
+function createInMemoryAdapters(): {
   flowRepository: IFlowRepository;
   sessionStateStore: ISessionStateStore;
   toolRepository: IToolRepository;
 } {
-  if (driver === "supabase") {
-    const supabaseClient = createSupabaseClientFromEnv(process.env);
-    const embeddingDimensions = parseOptionalInteger(process.env.TOOL_EMBEDDING_DIMENSIONS);
-    return {
-      flowRepository: new SupabaseFlowRepository(supabaseClient),
-      sessionStateStore: new SupabaseSessionStateStore(supabaseClient),
-      toolRepository: new SupabaseToolRepository(supabaseClient, {
-        ...(process.env.GEMINI_API_KEY ? { geminiApiKey: process.env.GEMINI_API_KEY } : {}),
-        ...(process.env.GOOGLE_API_KEY ? { googleApiKey: process.env.GOOGLE_API_KEY } : {}),
-        ...(process.env.GOOGLE_BASE_URL ? { googleBaseUrl: process.env.GOOGLE_BASE_URL } : {}),
-        ...(process.env.TOOL_EMBEDDING_MODEL
-          ? { embeddingModel: process.env.TOOL_EMBEDDING_MODEL }
-          : {}),
-        ...(embeddingDimensions !== undefined ? { embeddingDimensions } : {})
-      })
-    };
-  }
-
   return {
     flowRepository: new InMemoryFlowRepository(),
     sessionStateStore: new InMemorySessionStateStore(),
-    toolRepository: new InMemoryToolRepository()
+    toolRepository: createLocalJsonToolRepository()
   };
+}
+
+function createLocalJsonToolRepository(): IToolRepository {
+  try {
+    const datasets = loadToolDatasetsFromLocalJson({
+      repoRootPath,
+      ...(process.env.FAQ_JSON_PATH ? { faqPath: process.env.FAQ_JSON_PATH } : {}),
+      ...(process.env.AUTOS_JSON_PATH ? { autosPath: process.env.AUTOS_JSON_PATH } : {}),
+      ...(process.env.DATES_JSON_PATH ? { datesPath: process.env.DATES_JSON_PATH } : {})
+    });
+    console.info(
+      `[bootstrap] tool_data_source=json datasets=${datasets
+        .map((dataset) => `${dataset.name}:${dataset.records.length}`)
+        .join(",")}`
+    );
+    return new InMemoryToolRepository(datasets);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.warn(
+      `[bootstrap] tool_data_source=json failed (${reason}). Falling back to default in-memory datasets.`
+    );
+    return new InMemoryToolRepository();
+  }
 }
 
 function parseOptionalInteger(value: string | undefined): number | undefined {

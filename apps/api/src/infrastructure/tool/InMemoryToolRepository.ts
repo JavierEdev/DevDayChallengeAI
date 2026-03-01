@@ -28,7 +28,7 @@ const DEFAULT_DATASETS: IToolDataset[] = [
     ]
   },
   {
-    name: "catalog",
+    name: "catalogo",
     description: "Resumen del catalogo de vehiculos",
     records: [
       {

@@ -25,7 +25,7 @@ interface ApiErrorShape {
   message?: string;
 }
 
-const DEFAULT_API_TIMEOUT_MS = 45_000;
+const DEFAULT_API_TIMEOUT_MS = 60_000;
 const configuredTimeout = Number(import.meta.env.VITE_API_TIMEOUT_MS ?? DEFAULT_API_TIMEOUT_MS);
 const API_TIMEOUT_MS =
   Number.isFinite(configuredTimeout) && configuredTimeout > 0

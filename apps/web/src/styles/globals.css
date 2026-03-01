@@ -2,8 +2,8 @@
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   line-height: 1.4;
   font-weight: 400;
-  color: #111827;
-  background: #f3f4f6;
+  color: #461604;
+  background: #fff8ec;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
@@ -25,4 +25,60 @@ body,
 
 body {
   min-width: 320px;
+}
+
+.toast-stack {
+  position: fixed;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2000;
+  display: grid;
+  gap: 8px;
+  width: min(92vw, 460px);
+}
+
+.toast-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border-radius: 10px;
+  border: 1px solid;
+  padding: 10px 12px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+  background: #ffffff;
+}
+
+.toast-item.is-success {
+  border-color: #16a34a;
+  color: #166534;
+}
+
+.toast-item.is-error {
+  border-color: #dc2626;
+  color: #991b1b;
+}
+
+.toast-item__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.toast-item__message {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.3;
+}
+
+.toast-item__close {
+  border: 0;
+  background: transparent;
+  color: inherit;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 2px;
 }

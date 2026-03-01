@@ -1,12 +1,11 @@
 import {
   FolderOpen,
-  MessageSquare,
-  PanelLeft,
-  PanelRight,
   RotateCcw,
   Save,
   ShieldCheck
 } from "lucide-react";
+import { ChevronDown, MessageSquare, PanelLeft, PanelRight } from "lucide-react";
+import { useRef } from "react";
 
 import { useFlowStore } from "@/state/flow.store";
 import { useUiStore } from "@/state/ui.store";
@@ -32,6 +31,7 @@ export function BuilderToolbar() {
   const toggleLeftSidebar = useUiStore((state) => state.toggleLeftSidebar);
   const toggleRightSidebar = useUiStore((state) => state.toggleRightSidebar);
   const toggleChat = useUiStore((state) => state.toggleChat);
+  const visualizationDropdownRef = useRef<HTMLDetailsElement>(null);
 
   const handleLoad = () => {
     void loadFlowById(flowId);
@@ -43,6 +43,13 @@ export function BuilderToolbar() {
 
   const handleSave = () => {
     void saveFlow();
+  };
+
+  const handleVisualizationAction = (action: () => void) => {
+    action();
+    if (visualizationDropdownRef.current) {
+      visualizationDropdownRef.current.open = false;
+    }
   };
 
   return (
@@ -105,24 +112,34 @@ export function BuilderToolbar() {
           onClick={handleSave}
           disabled={isSaving}
         />
-        <ToolbarActionButton
-          label="Palette"
-          icon={<PanelLeft size={14} />}
-          onClick={toggleLeftSidebar}
-          className="is-muted"
-        />
-        <ToolbarActionButton
-          label="Inspector"
-          icon={<PanelRight size={14} />}
-          onClick={toggleRightSidebar}
-          className="is-muted"
-        />
-        <ToolbarActionButton
-          label="Chat"
-          icon={<MessageSquare size={14} />}
-          onClick={toggleChat}
-          className="is-muted"
-        />
+        <details className="toolbar-dropdown" ref={visualizationDropdownRef}>
+          <summary className="toolbar-dropdown__trigger">
+            <span className="toolbar-action__content">
+              <span>Visualizacion</span>
+              <ChevronDown size={14} aria-hidden="true" />
+            </span>
+          </summary>
+          <div className="toolbar-dropdown__menu">
+            <ToolbarActionButton
+              label="Palette"
+              icon={<PanelLeft size={14} />}
+              onClick={() => handleVisualizationAction(toggleLeftSidebar)}
+              className="is-muted toolbar-dropdown__item"
+            />
+            <ToolbarActionButton
+              label="Inspector"
+              icon={<PanelRight size={14} />}
+              onClick={() => handleVisualizationAction(toggleRightSidebar)}
+              className="is-muted toolbar-dropdown__item"
+            />
+            <ToolbarActionButton
+              label="Chat"
+              icon={<MessageSquare size={14} />}
+              onClick={() => handleVisualizationAction(toggleChat)}
+              className="is-muted toolbar-dropdown__item"
+            />
+          </div>
+        </details>
       </div>
     </section>
   );

@@ -19,6 +19,7 @@ import {
 } from "@/lib/reactflow/rf.helpers";
 import type { BuilderFlowEdge, BuilderFlowNode, BuilderNodeType } from "@/lib/reactflow/rf.types";
 import { createFlow, getFlow, upsertFlow, validateFlow } from "@/services/flow-executor.api";
+import { showErrorToast, showSuccessToast } from "@/services/toast-notifications.service";
 
 interface FlowMetaPatch {
   id?: string;
@@ -276,7 +277,9 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
 
   loadFlowById: async (flowId) => {
     if (!flowId.trim()) {
-      set({ lastError: "Flow ID requerido para cargar." });
+      const message = "Flow ID requerido para cargar.";
+      set({ lastError: message });
+      showErrorToast(message);
       return null;
     }
 
@@ -284,9 +287,12 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
     try {
       const flow = await getFlow(flowId);
       get().loadFlowDefinition(flow);
+      showSuccessToast("Flow cargado correctamente.");
       return flow;
     } catch (error) {
-      set({ lastError: normalizeError(error) });
+      const message = normalizeError(error);
+      set({ lastError: message });
+      showErrorToast(`Error al cargar flow: ${message}`);
       return null;
     } finally {
       set({ isLoading: false });
@@ -298,9 +304,18 @@ export const useFlowStore = create<FlowStoreState>((set, get) => ({
     try {
       const response = await validateFlow(get().buildFlowDefinition());
       set({ validation: response });
+      if (response.valid) {
+        showSuccessToast("Validacion exitosa.");
+      } else {
+        showErrorToast(
+          `Validacion con errores: ${response.errors.length} error(es), ${response.warnings.length} warning(s).`
+        );
+      }
       return response;
     } catch (error) {
-      set({ lastError: normalizeError(error), validation: null });
+      const message = normalizeError(error);
+      set({ lastError: message, validation: null });
+      showErrorToast(`Error al validar flow: ${message}`);
       return null;
     } finally {
       set({ isValidating: false });

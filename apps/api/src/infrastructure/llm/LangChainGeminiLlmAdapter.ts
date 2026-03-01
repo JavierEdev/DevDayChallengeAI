@@ -45,13 +45,73 @@ export class LangChainGeminiLlmAdapter implements IAgentLlmPort {
     }
 
     const model = new ChatGoogleGenerativeAI(effectiveModel, modelConfig);
-    const response = await model.invoke(toLangChainMessages(input.messages));
+    const primaryMessages = this.sanitizeMessages(input.messages);
+    let response: Awaited<ReturnType<typeof model.invoke>>;
 
-    const result: IAgentLlmResult = {
-      text: extractTextFromLlmContent(response.content),
+    try {
+      response = await model.invoke(toLangChainMessages(primaryMessages));
+    } catch (error) {
+      if (!this.shouldRetryWithReducedContext(error)) {
+        throw error;
+      }
+
+      const fallbackMessages = this.reduceMessagesForRetry(primaryMessages);
+      response = await model.invoke(toLangChainMessages(fallbackMessages));
+    }
+
+    const extractedText = extractTextFromLlmContent(response.content).trim();
+    const text =
+      extractedText.length > 0
+        ? extractedText
+        : "No pude generar una respuesta en este momento. Intenta nuevamente.";
+
+    return {
+      text,
       model: effectiveModel
     };
+  }
 
-    return result;
+  private sanitizeMessages(messages: IAgentLlmInvocation["messages"]): IAgentLlmInvocation["messages"] {
+    const normalized = messages
+      .map((message) => ({
+        role: message.role,
+        content: message.content?.trim() ?? ""
+      }))
+      .filter((message) => message.content.length > 0);
+
+    return normalized.length > 0
+      ? normalized
+      : [
+          {
+            role: "user",
+            content: "Hola"
+          }
+        ];
+  }
+
+  private shouldRetryWithReducedContext(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+      return false;
+    }
+
+    const message = error.message.toLowerCase();
+    return message.includes("reading 'parts'") || message.includes("reading \"parts\"");
+  }
+
+  private reduceMessagesForRetry(
+    messages: IAgentLlmInvocation["messages"]
+  ): IAgentLlmInvocation["messages"] {
+    const systemMessages = messages.filter((message) => message.role === "system").slice(0, 1);
+    const nonSystemMessages = messages.filter((message) => message.role !== "system").slice(-6);
+    const fallback = [...systemMessages, ...nonSystemMessages];
+
+    return fallback.length > 0
+      ? fallback
+      : [
+          {
+            role: "user",
+            content: "Hola"
+          }
+        ];
   }
 }

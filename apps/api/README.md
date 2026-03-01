@@ -1,56 +1,48 @@
 # @devday/api
 
-Backend base for the hackathon using layered architecture:
+Backend for the hackathon using layered architecture:
 
 - `Domain`: contracts/interfaces.
 - `Application`: use cases.
-- `Infrastructure`: external integrations and in-memory adapters.
+- `Infrastructure`: adapters for LLM and persistence.
 - `HTTP`: endpoint exposure with Fastify.
 
-## Folder structure
+## Run
 
-- `src/domain/agent/IAgentLlmPort.ts`: LLM port contract (`IAgentLlmPort`).
-- `src/domain/agent/IAgentProviderFactory.ts`: abstract factory contract (`IAgentProviderFactory`).
-- `src/domain/session/ISessionStateStore.ts`: session store contract.
-- `src/domain/tool/IToolRepository.ts`: tool repository contract.
+1. Copy `.env.example` to `.env`.
+2. Set `GOOGLE_API_KEY` (or `GEMINI_API_KEY`).
+3. Optional: configure Supabase env vars if using DB persistence.
+4. From repo root run:
+   - `npm run dev --workspace @devday/api`
 
-- `src/application/session/CreateSessionUseCase.ts`: creates runtime session state.
-- `src/application/session/RunConversationTurnUseCase.ts`: handles one chat turn.
-- `src/application/flow/ValidateFlowUseCase.ts`: validates flow structure.
+## Persistence mode
 
-- `src/infrastructure/llm/LangChainGeminiLlmAdapter.ts`: Gemini implementation via LangChain.
-- `src/infrastructure/llm/GeminiLlmProviderFactory.ts`: concrete provider factory.
-- `src/infrastructure/llm/CreateAgentLlmPort.ts`: environment-based provider resolver.
-- `src/infrastructure/session/InMemorySessionStateStore.ts`: in-memory session state.
-- `src/infrastructure/tool/InMemoryToolRepository.ts`: static JSON-like datasets in memory.
+- `PERSISTENCE_DRIVER=memory` (default): in-memory repositories.
+- `PERSISTENCE_DRIVER=supabase`: uses Supabase repositories for flows, sessions and tool datasets.
 
-- `src/http/CreateHttpServer.ts`: Fastify app builder.
-- `src/http/routes/SessionRoutes.ts`: session endpoints.
-- `src/http/routes/FlowRoutes.ts`: flow validation endpoint.
-- `src/main.ts`: bootstrap/composition root.
+Required for Supabase:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+
+## Supabase SQL
+
+- Migration: `supabase/migrations/0001_init.sql`
+- Optional seed: `supabase/seeds/0001_seed_tool_data.sql`
+- JSON seed script (uses `faq.json`, `autos.json`, `dates.json` from repo root):
+  - `npm run seed:supabase:tools --workspace @devday/api`
 
 ## Endpoints
 
-- `POST /v1/sessions`
-  - Body: `CreateSessionRequest` (shared schema)
-  - Response: `CreateSessionResponse`
-
-- `POST /v1/sessions/:sessionId/messages`
-  - Body: `{ message: string, metadata?: Record<string, unknown> }`
-  - Response: `SendMessageResponse`
-
+- `POST /v1/flows`
+- `GET /v1/flows/:flowId`
+- `PUT /v1/flows/:flowId`
+- `DELETE /v1/flows/:flowId`
 - `POST /v1/flows/validate`
-  - Body: `FlowDefinition`
-  - Response: `ValidateFlowResponse`
+- `POST /v1/sessions`
+- `POST /v1/chat/sessions/:sessionId/messages`
 
 ## Swagger
 
 - UI: `GET /docs`
 - OpenAPI JSON: `GET /docs/json`
-- Cada endpoint documenta `request` y `response` con los schemas compartidos de `@devday/shared`.
-
-## Run
-
-1. Copy `.env.example` to `.env` and set API key.
-2. Run `npm install` at repo root.
-3. Run `npm run dev --workspace @devday/api`.

@@ -105,7 +105,7 @@ export async function createHttpServer(
     registerTelegramRoutes(fastify, {
       handleTelegramMessageUseCase: dependencies.handleTelegramMessageUseCase,
       telegramWebhookSecret: dependencies.telegramWebhookSecret,
-      telegramDefaultFlowId: dependencies.telegramDefaultFlowId
+      ...(dependencies.telegramDefaultFlowId && { telegramDefaultFlowId: dependencies.telegramDefaultFlowId })
     });
   }
 

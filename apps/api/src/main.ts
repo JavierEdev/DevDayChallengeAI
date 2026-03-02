@@ -98,10 +98,11 @@ async function bootstrap(): Promise<void> {
     createSessionUseCase,
     runConversationTurnUseCase,
     validateFlowUseCase,
-    handleTelegramMessageUseCase,
-    telegramWebhookSecret:
-      telegramChannelConfig?.transport === "webhook" ? telegramChannelConfig.webhookSecret : undefined,
-    telegramDefaultFlowId: telegramChannelConfig?.defaultFlowId
+    ...(handleTelegramMessageUseCase ? { handleTelegramMessageUseCase } : {}),
+    ...(telegramChannelConfig?.transport === "webhook" && telegramChannelConfig?.webhookSecret
+      ? { telegramWebhookSecret: telegramChannelConfig.webhookSecret }
+      : {}),
+    ...(telegramChannelConfig?.defaultFlowId ? { telegramDefaultFlowId: telegramChannelConfig.defaultFlowId } : {})
   });
 
   const port = Number(process.env.PORT ?? "3000");
@@ -127,7 +128,7 @@ async function bootstrap(): Promise<void> {
         await handleTelegramMessageUseCase.execute({
           externalChatId,
           text,
-          fallbackFlowId: telegramChannelConfig.defaultFlowId
+          ...(telegramChannelConfig.defaultFlowId ? { fallbackFlowId: telegramChannelConfig.defaultFlowId } : {})
         });
       }
     });

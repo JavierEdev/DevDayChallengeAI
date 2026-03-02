@@ -96,7 +96,7 @@ export function registerTelegramRoutes(
         await dependencies.handleTelegramMessageUseCase.execute({
           externalChatId,
           text,
-          fallbackFlowId: dependencies.telegramDefaultFlowId
+          ...(dependencies.telegramDefaultFlowId && { fallbackFlowId: dependencies.telegramDefaultFlowId })
         });
 
         return reply.code(200).send({ ok: true });

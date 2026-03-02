@@ -141,3 +141,19 @@ pnpm run dev:web  # Levanta solo frontend
 pnpm run dev:api  # Levanta solo backend
 pnpm run build    # Build de todos los paquetes/apps
 ```
+
+## Actividades por integrante
+
+> Basado en historial de commits del repositorio.
+
+- Javier Estrada
+  - Estructura inicial del proyecto (monorepo y base del backend).
+  - Definicion de schemas/contratos de API y refactors de rutas y tipos.
+  - Integracion de persistencia y ajustes de configuracion (URLs y puertos).
+  - Refactors funcionales en backend para estabilizar flujo conversacional.
+
+- Byron Josue Alejandro Coc Palomo
+  - Mejoras y refactorizacion del frontend (componentes y flujo de UI).
+  - Ajustes de dependencias y correcciones de integracion entre modulos.
+  - Implementacion de integracion con canal Telegram.
+  - Ajustes finales de configuracion y consolidacion de cambios.

@@ -162,3 +162,4 @@ pnpm run build    # Build de todos los paquetes/apps
   - Ajustes de dependencias y correcciones de integracion entre modulos.
   - Implementacion de integracion con canal Telegram.
   - Ajustes finales de configuracion y consolidacion de cambios.
+ 
